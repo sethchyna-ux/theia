@@ -65,3 +65,13 @@ pub struct ServerTelemetry {
     pub load_avg: String,
     pub uptime: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnownHostEntry {
+    pub line_number: usize,
+    pub host: String,
+    pub key_type: String,
+    pub key_base64: String,
+    pub fingerprint: String,
+    pub is_hashed: bool,
+}

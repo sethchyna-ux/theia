@@ -1,5 +1,6 @@
 mod hosts;
 mod keychain;
+mod known_hosts;
 mod local_pty;
 mod models;
 mod session;
@@ -11,7 +12,7 @@ mod vault;
 
 use hosts::{get_all_hosts, load_bookmarks, save_bookmarks};
 use local_pty::LocalPtyManager;
-use models::{HostConfig, KeyPairInfo, RemoteFileEntry, ServerTelemetry, Snippet, TunnelConfig};
+use models::{HostConfig, KeyPairInfo, KnownHostEntry, RemoteFileEntry, ServerTelemetry, Snippet, TunnelConfig};
 use session::SessionManager;
 use sftp::SftpManager;
 use snippets::{load_snippets, save_snippets};
@@ -337,6 +338,48 @@ fn set_window_vibrancy(window: tauri::WebviewWindow, enabled: bool) -> Result<()
     Ok(())
 }
 
+// ---------------------- Known Hosts & Security Commands ----------------------
+#[tauri::command]
+fn get_known_hosts() -> Vec<KnownHostEntry> {
+    known_hosts::get_known_hosts()
+}
+
+#[tauri::command]
+fn remove_known_host(line_number: usize) -> Result<(), String> {
+    known_hosts::remove_known_host(line_number)
+}
+
+// ---------------------- Native Notification & Dock Alert ----------------------
+#[tauri::command]
+fn send_native_notification(
+    app: AppHandle,
+    title: String,
+    message: String,
+    bounce_dock: bool,
+) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use tauri::Manager;
+        if bounce_dock {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.request_user_attention(Some(tauri::UserAttentionType::Informational));
+            }
+        }
+
+        let clean_title = title.replace('"', "\\\"");
+        let clean_msg = message.replace('"', "\\\"");
+        let script = format!(
+            "display notification \"{}\" with title \"{}\" sound name \"Hero\"",
+            clean_msg, clean_title
+        );
+        let _ = std::process::Command::new("osascript")
+            .arg("-e")
+            .arg(script)
+            .spawn();
+    }
+    Ok(())
+}
+
 // ---------------------- App Entrypoint ----------------------
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -389,6 +432,9 @@ pub fn run() {
             keychain_get_secret,
             keychain_delete_secret,
             set_window_vibrancy,
+            get_known_hosts,
+            remove_known_host,
+            send_native_notification,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

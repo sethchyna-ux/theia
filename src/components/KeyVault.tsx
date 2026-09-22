@@ -9,14 +9,26 @@ import {
   Terminal,
   X,
   Fingerprint,
+  Search,
+  Trash2,
+  Globe,
+  Hash,
+  ShieldAlert,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { KeyPairInfo } from "../types";
+import { KeyPairInfo, KnownHostEntry } from "../types";
 
 export const KeyVault: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<"keys" | "known_hosts">("keys");
   const [keys, setKeys] = useState<KeyPairInfo[]>([]);
   const [copiedKeyIndex, setCopiedKeyIndex] = useState<number | null>(null);
   const [copiedIdIndex, setCopiedIdIndex] = useState<number | null>(null);
+
+  // Known hosts state
+  const [knownHosts, setKnownHosts] = useState<KnownHostEntry[]>([]);
+  const [knownHostsSearch, setKnownHostsSearch] = useState("");
+  const [copiedHostIndex, setCopiedHostIndex] = useState<number | null>(null);
+  const [deletingLine, setDeletingLine] = useState<number | null>(null);
 
   // Modal for new key pair
   const [showGenerateModal, setShowGenerateModal] = useState(false);
@@ -31,30 +43,35 @@ export const KeyVault: React.FC = () => {
       setKeys(list);
     } catch (err) {
       console.error(err);
-      // Fallback
-      setKeys([
-        {
-          name: "id_ed25519",
-          key_type: "ssh-ed25519",
-          public_key:
-            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICa5fU1Hq9mH3WbJpKlq5rZ7yO2t9s8jK1qLmNoPqRsT theia@macos",
-          fingerprint: "SHA256:7vK8pLm3qX9yZ1aB2cE4gH6jK8nO0pQ2rS4tU6vW8xY",
-          path: "~/.ssh/id_ed25519",
-        },
-        {
-          name: "id_rsa_legacy",
-          key_type: "ssh-rsa (4096-bit)",
-          public_key:
-            "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC9jKl1234567890abcdef... theia-rsa@macos",
-          fingerprint: "SHA256:4aB8cE0gH2jK4nO6pQ8rS0tU2vW4xY6zA8bC0dE2fG4",
-          path: "~/.ssh/id_rsa_legacy",
-        },
-      ]);
+      setKeys([]);
+    }
+  };
+
+  const loadKnownHosts = async () => {
+    try {
+      const list = await invoke<KnownHostEntry[]>("get_known_hosts");
+      setKnownHosts(list);
+    } catch (err) {
+      console.error("Failed to load known_hosts:", err);
+      setKnownHosts([]);
+    }
+  };
+
+  const handleDeleteKnownHost = async (lineNumber: number) => {
+    setDeletingLine(lineNumber);
+    try {
+      await invoke("remove_known_host", { lineNumber });
+      await loadKnownHosts();
+    } catch (err) {
+      console.error("Failed to remove known_host:", err);
+    } finally {
+      setDeletingLine(null);
     }
   };
 
   useEffect(() => {
     loadKeys();
+    loadKnownHosts();
   }, []);
 
   const handleCopyPublicKey = (pubKey: string, index: number) => {
@@ -160,32 +177,85 @@ export const KeyVault: React.FC = () => {
         </button>
       </div>
 
-      {/* Local Encryption Banner */}
+      {/* Segmented Tab Switcher */}
       <div
         style={{
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          backgroundColor: "rgba(16, 185, 129, 0.08)",
-          border: "1px solid rgba(16, 185, 129, 0.25)",
-          borderRadius: "8px",
-          padding: "12px 18px",
-          marginBottom: "24px",
+          gap: "8px",
+          marginBottom: "20px",
+          borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+          paddingBottom: "12px",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <ShieldCheck size={18} color="#34d399" />
-          <span style={{ fontSize: "13px", color: "#a7f3d0" }}>
-            <strong>Local & Encrypted:</strong> Your private keys are stored securely in ~/.ssh and never leave your macOS device.
-          </span>
-        </div>
-        <div style={{ fontSize: "12px", color: "#34d399", fontWeight: "600" }}>
-          {keys.length} Keys Detected
-        </div>
+        <button
+          type="button"
+          onClick={() => setActiveTab("keys")}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "8px 16px",
+            borderRadius: "6px",
+            border: "none",
+            backgroundColor: activeTab === "keys" ? "rgba(16, 185, 129, 0.15)" : "transparent",
+            color: activeTab === "keys" ? "#34d399" : "#94a3b8",
+            fontSize: "13px",
+            fontWeight: "600",
+            cursor: "pointer",
+          }}
+        >
+          <KeyRound size={16} /> SSH Key Pairs ({keys.length})
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("known_hosts")}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "8px 16px",
+            borderRadius: "6px",
+            border: "none",
+            backgroundColor: activeTab === "known_hosts" ? "rgba(6, 182, 212, 0.15)" : "transparent",
+            color: activeTab === "known_hosts" ? "#22d3ee" : "#94a3b8",
+            fontSize: "13px",
+            fontWeight: "600",
+            cursor: "pointer",
+          }}
+        >
+          <ShieldCheck size={16} /> Known Hosts & Security ({knownHosts.length})
+        </button>
       </div>
 
-      {/* Keys List */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      {activeTab === "keys" && (
+        <>
+          {/* Local Encryption Banner */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              backgroundColor: "rgba(16, 185, 129, 0.08)",
+              border: "1px solid rgba(16, 185, 129, 0.25)",
+              borderRadius: "8px",
+              padding: "12px 18px",
+              marginBottom: "24px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <ShieldCheck size={18} color="#34d399" />
+              <span style={{ fontSize: "13px", color: "#a7f3d0" }}>
+                <strong>Local & Encrypted:</strong> Your private keys are stored securely in ~/.ssh and never leave your macOS device.
+              </span>
+            </div>
+            <div style={{ fontSize: "12px", color: "#34d399", fontWeight: "600" }}>
+              {keys.length} Keys Detected
+            </div>
+          </div>
+
+          {/* Keys List */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         {keys.map((k, idx) => (
           <div
             key={k.path || idx}
@@ -364,6 +434,242 @@ export const KeyVault: React.FC = () => {
           </div>
         ))}
       </div>
+        </>
+      )}
+
+      {activeTab === "known_hosts" && (
+        <>
+          {/* Security Banner */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              backgroundColor: "rgba(6, 182, 212, 0.08)",
+              border: "1px solid rgba(6, 182, 212, 0.25)",
+              borderRadius: "8px",
+              padding: "12px 18px",
+              marginBottom: "20px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <ShieldAlert size={18} color="#22d3ee" />
+              <span style={{ fontSize: "13px", color: "#bae6fd" }}>
+                <strong>Known Hosts Security Inspector:</strong> Cryptographic server keys stored in{" "}
+                <code style={{ color: "#e0f2fe" }}>~/.ssh/known_hosts</code>. Mismatched or stale keys can cause SSH connection aborts.
+              </span>
+            </div>
+            <div style={{ fontSize: "12px", color: "#22d3ee", fontWeight: "600" }}>
+              {knownHosts.length} Entries Audited
+            </div>
+          </div>
+
+          {/* Search bar */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              backgroundColor: "rgba(255, 255, 255, 0.04)",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              borderRadius: "8px",
+              padding: "8px 14px",
+              marginBottom: "16px",
+            }}
+          >
+            <Search size={16} color="#64748b" />
+            <input
+              type="text"
+              placeholder="Filter by hostname, IP address, key type, or SHA256 fingerprint..."
+              value={knownHostsSearch}
+              onChange={(e) => setKnownHostsSearch(e.target.value)}
+              style={{
+                flex: 1,
+                background: "none",
+                border: "none",
+                outline: "none",
+                color: "#f8fafc",
+                fontSize: "13px",
+              }}
+            />
+            {knownHostsSearch && (
+              <button
+                type="button"
+                onClick={() => setKnownHostsSearch("")}
+                style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer" }}
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* Known hosts list */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {knownHosts
+              .filter((h) => {
+                if (!knownHostsSearch.trim()) return true;
+                const q = knownHostsSearch.toLowerCase();
+                return (
+                  h.host.toLowerCase().includes(q) ||
+                  h.fingerprint.toLowerCase().includes(q) ||
+                  h.key_type.toLowerCase().includes(q)
+                );
+              })
+              .map((kh, idx) => (
+                <div
+                  key={kh.line_number}
+                  style={{
+                    backgroundColor: "#0d1424",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    borderRadius: "10px",
+                    padding: "16px 20px",
+                    boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          fontFamily: "'JetBrains Mono', monospace",
+                          color: "#64748b",
+                          backgroundColor: "rgba(255, 255, 255, 0.05)",
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                        }}
+                      >
+                        Line #{kh.line_number}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: "600",
+                          color: "#f8fafc",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                      >
+                        {kh.is_hashed ? (
+                          <>
+                            <Hash size={15} color="#f59e0b" />
+                            <span style={{ color: "#fcd34d", fontFamily: "'JetBrains Mono', monospace", fontSize: "12px" }}>
+                              {kh.host}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <Globe size={15} color="#06b6d4" />
+                            <span>{kh.host}</span>
+                          </>
+                        )}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          backgroundColor: "rgba(6, 182, 212, 0.15)",
+                          color: "#22d3ee",
+                          padding: "2px 8px",
+                          borderRadius: "12px",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {kh.key_type}
+                      </span>
+                      {kh.is_hashed && (
+                        <span
+                          style={{
+                            fontSize: "10px",
+                            backgroundColor: "rgba(245, 158, 11, 0.15)",
+                            color: "#fbbf24",
+                            padding: "2px 6px",
+                            borderRadius: "10px",
+                          }}
+                        >
+                          HMAC-SHA1 Hashed
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(kh.fingerprint);
+                          setCopiedHostIndex(idx);
+                          setTimeout(() => setCopiedHostIndex(null), 2000);
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          fontSize: "11px",
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          border: "1px solid rgba(255, 255, 255, 0.1)",
+                          backgroundColor: "rgba(255, 255, 255, 0.04)",
+                          color: copiedHostIndex === idx ? "#34d399" : "#94a3b8",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {copiedHostIndex === idx ? <Check size={12} /> : <Copy size={12} />}
+                        {copiedHostIndex === idx ? "Copied" : "Copy Fingerprint"}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={deletingLine === kh.line_number}
+                        onClick={() => handleDeleteKnownHost(kh.line_number)}
+                        title="Remove host key from ~/.ssh/known_hosts"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          fontSize: "11px",
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          border: "1px solid rgba(244, 63, 94, 0.25)",
+                          backgroundColor: "rgba(244, 63, 94, 0.08)",
+                          color: "#fb7185",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <Trash2 size={12} />
+                        {deletingLine === kh.line_number ? "Removing..." : "Delete Key"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Fingerprint block */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      backgroundColor: "#060911",
+                      border: "1px solid rgba(255, 255, 255, 0.06)",
+                      borderRadius: "6px",
+                      padding: "8px 12px",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: "11px",
+                      color: "#94a3b8",
+                    }}
+                  >
+                    <Fingerprint size={14} color="#64748b" />
+                    <span style={{ color: "#38bdf8" }}>{kh.fingerprint}</span>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </>
+      )}
 
       {/* Generate Key Modal */}
       {showGenerateModal && (

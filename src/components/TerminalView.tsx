@@ -7,6 +7,7 @@ import { listen } from "@tauri-apps/api/event";
 import { HostConfig } from "../types";
 import { TERMINAL_THEMES } from "../themes";
 import { Search, ChevronDown, ChevronUp, X, ZoomIn, ZoomOut, Terminal as TermIcon, Download } from "lucide-react";
+import { TerminalContextMenu } from "./TerminalContextMenu";
 
 interface TerminalViewProps {
   sessionId: string;
@@ -18,6 +19,7 @@ interface TerminalViewProps {
   onFocus?: () => void;
   broadcastMode?: boolean;
   onBroadcastInput?: (data: string) => void;
+  onOpenPathInEditor?: (path: string) => void;
 }
 
 export const TerminalView: React.FC<TerminalViewProps> = ({
@@ -30,6 +32,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   onFocus,
   broadcastMode,
   onBroadcastInput,
+  onOpenPathInEditor,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -40,6 +43,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [fontSize, setFontSize] = useState(13);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    selectedText: string;
+    detectedPath: string | null;
+  } | null>(null);
+
+  // Command duration tracker for background notifications
+  const lastCommandStartTimeRef = useRef<number | null>(null);
+  const isCommandRunningRef = useRef<boolean>(false);
 
   const isLocal = host.source === "local" || host.id.startsWith("local_");
 
@@ -104,7 +119,30 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
     // Listen to incoming data from backend
     const unlistenDataPromise = listen<string>(`ssh-data-${sessionId}`, (event) => {
-      term.write(event.payload);
+      const payload = event.payload;
+      term.write(payload);
+
+      // Check if a background command finished
+      if (isCommandRunningRef.current && lastCommandStartTimeRef.current) {
+        const elapsed = Date.now() - lastCommandStartTimeRef.current;
+        if (
+          elapsed >= 4000 &&
+          (payload.includes("$ ") ||
+            payload.includes("# ") ||
+            payload.includes("% ") ||
+            payload.includes("❯ ") ||
+            payload.includes("> "))
+        ) {
+          isCommandRunningRef.current = false;
+          if (document.hidden || !isActive) {
+            invoke("send_native_notification", {
+              title: "Command Completed",
+              message: `Task in '${host.name}' finished in ${Math.round(elapsed / 1000)}s`,
+              bounceDock: true,
+            }).catch(() => {});
+          }
+        }
+      }
     });
 
     const unlistenClosePromise = listen<number>(`ssh-close-${sessionId}`, (event) => {
@@ -113,6 +151,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
     // Send user input to backend
     term.onData((data) => {
+      if (data.includes("\r") || data.includes("\n")) {
+        lastCommandStartTimeRef.current = Date.now();
+        isCommandRunningRef.current = true;
+      }
       if (broadcastMode && onBroadcastInput) {
         onBroadcastInput(data);
       } else {
@@ -203,13 +245,69 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     }
   };
 
-  // Update theme dynamically
-  useEffect(() => {
-    if (termRef.current) {
-      const selected = TERMINAL_THEMES[themeId || "obsidian"] || TERMINAL_THEMES.obsidian;
-      termRef.current.options.theme = selected;
+  const extractPath = (text: string): string | null => {
+    if (!text) return null;
+    const trimmed = text.trim();
+    const pathRegex = /(?:~?\/|\.\/)?(?:[\w\.\-]+\/)*[\w\.\-]+(?:\.[\w]+)?/;
+    const match = trimmed.match(pathRegex);
+    if (match && match[0] && (match[0].includes("/") || match[0].includes("."))) {
+      return match[0];
     }
-  }, [themeId]);
+    return null;
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const selection = termRef.current?.getSelection() || "";
+    const path = extractPath(selection);
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      selectedText: selection,
+      detectedPath: path,
+    });
+  };
+
+  const handleCopy = () => {
+    const selection = termRef.current?.getSelection() || "";
+    if (selection) {
+      navigator.clipboard.writeText(selection);
+    }
+  };
+
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        invoke("ssh_send_data", { sessionId, data: text }).catch(() => {});
+      }
+    } catch (err) {
+      console.error("Paste failed:", err);
+    }
+  };
+
+  const handleClearBuffer = () => {
+    termRef.current?.clear();
+  };
+
+  const handleDownloadPath = async (remotePath: string) => {
+    try {
+      const data = await invoke<number[]>("sftp_read", {
+        sessionId,
+        path: remotePath,
+      });
+      const bytes = new Uint8Array(data);
+      const blob = new Blob([bytes], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = remotePath.split("/").pop() || "downloaded_file";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("SFTP download failed:", err);
+    }
+  };
 
   // Export scrollback buffer as .log file
   const handleExportLog = () => {
@@ -427,11 +525,30 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
       <div
         ref={containerRef}
+        onContextMenu={handleContextMenu}
         style={{
           width: "100%",
           height: "calc(100% - 25px)",
         }}
       />
+
+      {/* Terminal Right-Click Floating Context Menu */}
+      {contextMenu && (
+        <TerminalContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          selectedText={contextMenu.selectedText}
+          detectedPath={contextMenu.detectedPath}
+          onCopy={handleCopy}
+          onPaste={handlePaste}
+          onOpenPathInEditor={onOpenPathInEditor}
+          onDownloadPath={handleDownloadPath}
+          onOpenSearch={() => setShowSearch(true)}
+          onExportLog={handleExportLog}
+          onClearBuffer={handleClearBuffer}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 };

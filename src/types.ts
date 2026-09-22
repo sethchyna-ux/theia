@@ -41,6 +41,15 @@ export interface KeyPairInfo {
   path: string;
 }
 
+export interface KnownHostEntry {
+  line_number: number;
+  host: string;
+  key_type: string;
+  key_base64: string;
+  fingerprint: string;
+  is_hashed: boolean;
+}
+
 export interface Snippet {
   id: string;
   name: string;

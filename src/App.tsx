@@ -359,6 +359,9 @@ export const App: React.FC = () => {
                   themeId={terminalTheme}
                   fontFamily={currentFont.fontFamily}
                   fontSize={fontSize}
+                  onOpenPathInEditor={(_path) => {
+                    setActiveView("sftp");
+                  }}
                 />
               </div>
             </>

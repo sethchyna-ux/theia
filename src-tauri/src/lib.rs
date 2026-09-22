@@ -7,6 +7,8 @@ mod network;
 mod session;
 mod sftp;
 mod snippets;
+mod ssh_agent;
+mod ssh_server;
 mod tray;
 mod tunnel;
 mod vault;
@@ -28,6 +30,7 @@ struct AppState {
     tunnel_mgr: TunnelManager,
     sftp_sessions: Arc<Mutex<std::collections::HashMap<String, SftpManager>>>,
     local_pty_mgr: LocalPtyManager,
+    ssh_server_mgr: Arc<ssh_server::SshServerManager>,
 }
 
 // ---------------------- Host Commands ----------------------
@@ -507,6 +510,72 @@ async fn probe_ports(host: String) -> Vec<network::PortProbeResult> {
     network::probe_ports(&host).await
 }
 
+// ---------------------- SSH Agent Commands ----------------------
+#[tauri::command]
+fn get_ssh_agent_status() -> ssh_agent::SshAgentStatus {
+    ssh_agent::get_agent_status()
+}
+
+#[tauri::command]
+fn list_agent_identities() -> Result<Vec<ssh_agent::SshIdentity>, String> {
+    ssh_agent::list_agent_identities()
+}
+
+#[tauri::command]
+fn add_key_to_agent(key_path: String, lifetime_secs: Option<u32>) -> Result<String, String> {
+    ssh_agent::add_key_to_agent(&key_path, lifetime_secs)
+}
+
+#[tauri::command]
+fn remove_key_from_agent(key_path: String) -> Result<String, String> {
+    ssh_agent::remove_key_from_agent(&key_path)
+}
+
+#[tauri::command]
+fn clear_all_agent_keys() -> Result<String, String> {
+    ssh_agent::clear_all_agent_keys()
+}
+
+// ---------------------- SSH Server Hosting Commands ----------------------
+#[tauri::command]
+fn get_ssh_server_status(state: State<'_, AppState>) -> ssh_server::SshServerStatus {
+    state.ssh_server_mgr.get_status()
+}
+
+#[tauri::command]
+fn start_ssh_server(
+    state: State<'_, AppState>,
+    config: ssh_server::SshServerConfig,
+) -> Result<ssh_server::SshServerStatus, String> {
+    state.ssh_server_mgr.start(config)
+}
+
+#[tauri::command]
+fn stop_ssh_server(state: State<'_, AppState>) -> Result<ssh_server::SshServerStatus, String> {
+    state.ssh_server_mgr.stop()
+}
+
+#[tauri::command]
+fn get_server_authorized_keys(state: State<'_, AppState>) -> Vec<String> {
+    state.ssh_server_mgr.get_authorized_keys()
+}
+
+#[tauri::command]
+fn add_server_authorized_key(
+    state: State<'_, AppState>,
+    key: String,
+) -> Result<Vec<String>, String> {
+    state.ssh_server_mgr.add_authorized_key(&key)
+}
+
+#[tauri::command]
+fn remove_server_authorized_key(
+    state: State<'_, AppState>,
+    key: String,
+) -> Result<Vec<String>, String> {
+    state.ssh_server_mgr.remove_authorized_key(&key)
+}
+
 // ---------------------- App Entrypoint ----------------------
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -529,6 +598,7 @@ pub fn run() {
             tunnel_mgr: TunnelManager::new(),
             sftp_sessions: Arc::new(Mutex::new(std::collections::HashMap::new())),
             local_pty_mgr: LocalPtyManager::new(),
+            ssh_server_mgr: Arc::new(ssh_server::SshServerManager::new()),
         })
         .invoke_handler(tauri::generate_handler![
             get_hosts,
@@ -565,6 +635,17 @@ pub fn run() {
             send_native_notification,
             ping_host,
             probe_ports,
+            get_ssh_agent_status,
+            list_agent_identities,
+            add_key_to_agent,
+            remove_key_from_agent,
+            clear_all_agent_keys,
+            get_ssh_server_status,
+            start_ssh_server,
+            stop_ssh_server,
+            get_server_authorized_keys,
+            add_server_authorized_key,
+            remove_server_authorized_key,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

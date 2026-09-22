@@ -205,6 +205,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <KeyRound size={18} />
           </button>
+
+          <button
+            onClick={() => onChangeView("server")}
+            title="SSH Server Hosting & SSH Agent Hub"
+            style={{
+              width: "38px",
+              height: "38px",
+              borderRadius: "8px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "none",
+              cursor: "pointer",
+              background: activeView === "server" ? "rgba(6, 182, 212, 0.2)" : "transparent",
+              color: activeView === "server" ? "#22d3ee" : "#64748b",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <Server size={18} />
+          </button>
         </div>
 
         {/* 2. Host Explorer Drawer */}

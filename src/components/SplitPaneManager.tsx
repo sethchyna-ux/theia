@@ -15,6 +15,7 @@ interface SplitPaneManagerProps {
   fontFamily?: string;
   fontSize?: number;
   onOpenPathInEditor?: (path: string) => void;
+  onTerminalOutput?: (sessionId: string, data: string) => void;
 }
 
 export const SplitPaneManager: React.FC<SplitPaneManagerProps> = ({
@@ -29,6 +30,7 @@ export const SplitPaneManager: React.FC<SplitPaneManagerProps> = ({
   fontFamily,
   fontSize,
   onOpenPathInEditor,
+  onTerminalOutput,
 }) => {
   if (tabs.length === 0) {
     return (
@@ -229,6 +231,7 @@ export const SplitPaneManager: React.FC<SplitPaneManagerProps> = ({
                   broadcastMode={broadcastMode}
                   onBroadcastInput={onBroadcastInput}
                   onOpenPathInEditor={onOpenPathInEditor}
+                  onTerminalOutput={onTerminalOutput}
                 />
               </div>
             </div>

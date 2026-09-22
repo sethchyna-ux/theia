@@ -12,6 +12,11 @@ import { ResourceMonitor } from "./components/ResourceMonitor";
 import { HostModal } from "./components/HostModal";
 import { CommandPalette } from "./components/CommandPalette";
 import { SettingsModal } from "./components/SettingsModal";
+import { SshServerAgentView } from "./components/SshServerAgentView";
+import { ThemeEditorModal } from "./components/ThemeEditorModal";
+import { CheatSheetModal } from "./components/CheatSheetModal";
+import { SessionReplayModal } from "./components/SessionReplayModal";
+import { SessionRecorder, RecordedSession } from "./utils/SessionRecorder";
 import { ActiveView, HostConfig, SessionTab, SplitLayout } from "./types";
 import {
   MONOSPACE_FONTS,
@@ -41,6 +46,19 @@ export const App: React.FC = () => {
 
   // Terminal Theme state (Obsidian, Catppuccin, Tokyo Night, Dracula, Nord, Matrix)
   const [terminalTheme, setTerminalTheme] = useState<string>("obsidian");
+
+  // Theme Studio modal
+  const [isThemeEditorOpen, setIsThemeEditorOpen] = useState(false);
+
+  // Cheat sheet modal
+  const [isCheatSheetOpen, setIsCheatSheetOpen] = useState(false);
+
+  // Session recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTimer, setRecordingTimer] = useState(0);
+  const [recordedSession, setRecordedSession] = useState<RecordedSession | null>(null);
+  const [isReplayModalOpen, setIsReplayModalOpen] = useState(false);
+  const recorderRef = React.useRef(new SessionRecorder());
 
   // Font & Preferences state
   const [fontId, setFontId] = useState<string>(getStoredFontId());
@@ -119,6 +137,44 @@ export const App: React.FC = () => {
     setActiveView("terminal");
   };
 
+  // Recording timer tick
+  useEffect(() => {
+    let interval: any = null;
+    if (isRecording) {
+      interval = setInterval(() => {
+        setRecordingTimer((prev) => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRecording]);
+
+  const handleToggleRecording = () => {
+    if (isRecording) {
+      const session = recorderRef.current.stop();
+      setIsRecording(false);
+      if (session && session.events.length > 0) {
+        setRecordedSession(session);
+        setIsReplayModalOpen(true);
+      }
+    } else {
+      const activeTab = tabs.find((t) => t.id === activeTabId);
+      const title = activeTab
+        ? `${activeTab.title} (${activeTab.host.hostname || activeTab.host.name})`
+        : "Local Terminal Session";
+      recorderRef.current.start(80, 24, title);
+      setIsRecording(true);
+      setRecordingTimer(0);
+    }
+  };
+
+  const handleTerminalOutput = (sessionId: string, data: string) => {
+    if (isRecording && sessionId === activeTabId) {
+      recorderRef.current.recordData(data);
+    }
+  };
+
   // Start with hosts loaded and an initial local terminal tab
   useEffect(() => {
     refreshHosts();
@@ -175,6 +231,12 @@ export const App: React.FC = () => {
       } else if (e.key.toLowerCase() === "h" && !e.shiftKey) {
         e.preventDefault();
         setHudVisible((prev) => !prev);
+      } else if (e.key === "/") {
+        e.preventDefault();
+        setIsCheatSheetOpen((prev) => !prev);
+      } else if (e.shiftKey && e.key.toLowerCase() === "r") {
+        e.preventDefault();
+        handleToggleRecording();
       } else if (e.shiftKey && e.key.toLowerCase() === "d") {
         e.preventDefault();
         setSplitLayout("vertical");
@@ -327,6 +389,11 @@ export const App: React.FC = () => {
         onToggleHud={() => setHudVisible(!hudVisible)}
         splitLayout={splitLayout}
         onChangeSplitLayout={setSplitLayout}
+        isRecording={isRecording}
+        recordingTimer={recordingTimer}
+        onToggleRecording={handleToggleRecording}
+        onOpenCheatSheet={() => setIsCheatSheetOpen(true)}
+        onOpenThemeEditor={() => setIsThemeEditorOpen(true)}
       />
 
       <div style={{ display: "flex", flex: 1, height: "calc(100vh - 44px)", overflow: "hidden" }}>
@@ -381,6 +448,7 @@ export const App: React.FC = () => {
                   onOpenPathInEditor={(_path) => {
                     setActiveView("sftp");
                   }}
+                  onTerminalOutput={handleTerminalOutput}
                 />
               </div>
             </>
@@ -399,6 +467,8 @@ export const App: React.FC = () => {
           )}
 
           {activeView === "vault" && <KeyVault />}
+
+          {activeView === "server" && <SshServerAgentView />}
         </main>
       </div>
 
@@ -438,7 +508,7 @@ export const App: React.FC = () => {
         }}
       />
 
-      {/* macOS Preferences / Settings Modal (⌘,) */}
+      {/* Settings Modal */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
@@ -447,9 +517,32 @@ export const App: React.FC = () => {
         currentFontSize={fontSize}
         onFontSizeChange={setFontSize}
         vibrancyEnabled={vibrancyEnabled}
-        onVibrancyChange={(enabled) => {
-          setVibrancyEnabled(enabled);
+        onVibrancyChange={setVibrancyEnabled}
+      />
+
+      {/* Theme Studio Modal */}
+      <ThemeEditorModal
+        isOpen={isThemeEditorOpen}
+        onClose={() => setIsThemeEditorOpen(false)}
+        currentThemeId={terminalTheme}
+        onApplyTheme={(thId) => {
+          setTerminalTheme(thId);
+          localStorage.setItem("theia_terminal_theme", thId);
         }}
+      />
+
+      {/* Cheat Sheet Modal */}
+      <CheatSheetModal
+        isOpen={isCheatSheetOpen}
+        onClose={() => setIsCheatSheetOpen(false)}
+      />
+
+      {/* Session Replay Modal */}
+      <SessionReplayModal
+        isOpen={isReplayModalOpen}
+        onClose={() => setIsReplayModalOpen(false)}
+        session={recordedSession}
+        themeId={terminalTheme}
       />
     </div>
   );

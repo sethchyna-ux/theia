@@ -89,4 +89,39 @@ export interface PortProbeResult {
 }
 
 export type SplitLayout = "single" | "vertical" | "horizontal" | "grid";
-export type ActiveView = "terminal" | "sftp" | "tunnels" | "snippets" | "vault";
+export type ActiveView = "terminal" | "sftp" | "tunnels" | "snippets" | "vault" | "server";
+
+export interface SshAgentStatus {
+  active: boolean;
+  socket_path: string | null;
+  identities_count: number;
+  is_locked: boolean;
+  error: string | null;
+}
+
+export interface SshIdentity {
+  bits: number | null;
+  fingerprint: string;
+  comment: string;
+  algorithm: string;
+}
+
+export interface SshServerStatus {
+  running: boolean;
+  port: number;
+  listen_address: string;
+  pid: number | null;
+  host_key_fingerprint: string | null;
+  lan_ips: string[];
+  authorized_keys_count: number;
+  username: string;
+  log_tail: string[];
+}
+
+export interface SshServerConfig {
+  port: number;
+  listen_address: string;
+  allow_password: boolean;
+  allow_pubkey: boolean;
+}
+

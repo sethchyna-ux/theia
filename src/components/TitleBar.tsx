@@ -13,6 +13,9 @@ import {
   Command,
   Palette,
   Sliders,
+  HelpCircle,
+  Video,
+  Circle,
 } from "lucide-react";
 import { SessionTab, SplitLayout } from "../types";
 import { TERMINAL_THEMES } from "../themes";
@@ -34,6 +37,11 @@ interface TitleBarProps {
   themeId?: string;
   onChangeTheme?: (themeId: string) => void;
   onOpenSettings?: () => void;
+  isRecording?: boolean;
+  recordingTimer?: number;
+  onToggleRecording?: () => void;
+  onOpenCheatSheet?: () => void;
+  onOpenThemeEditor?: () => void;
 }
 
 export const TitleBar: React.FC<TitleBarProps> = ({
@@ -53,6 +61,11 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   themeId = "obsidian",
   onChangeTheme,
   onOpenSettings,
+  isRecording = false,
+  recordingTimer = 0,
+  onToggleRecording,
+  onOpenCheatSheet,
+  onOpenThemeEditor,
 }) => {
   const [showThemeMenu, setShowThemeMenu] = React.useState(false);
   return (
@@ -226,6 +239,64 @@ export const TitleBar: React.FC<TitleBarProps> = ({
           </button>
         )}
 
+        {onOpenCheatSheet && (
+          <button
+            onClick={onOpenCheatSheet}
+            title="Shortcuts & Command Cheat Sheet (⌘/)"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              padding: "4px 8px",
+              borderRadius: "6px",
+              fontSize: "11px",
+              fontWeight: 500,
+              cursor: "pointer",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              background: "rgba(255, 255, 255, 0.04)",
+              color: "#cbd5e1",
+            }}
+          >
+            <HelpCircle size={12} color="#c084fc" />
+            <span>⌘/</span>
+          </button>
+        )}
+
+        {onToggleRecording && (
+          <button
+            onClick={onToggleRecording}
+            title={isRecording ? "Stop Session Recording" : "Record Terminal Session (Asciinema .cast)"}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+              padding: "4px 9px",
+              borderRadius: "6px",
+              fontSize: "11px",
+              fontWeight: 600,
+              cursor: "pointer",
+              border: isRecording ? "1px solid #f43f5e" : "1px solid rgba(255, 255, 255, 0.1)",
+              background: isRecording ? "rgba(244, 63, 94, 0.2)" : "rgba(255, 255, 255, 0.04)",
+              color: isRecording ? "#fda4af" : "#94a3b8",
+              boxShadow: isRecording ? "0 0 10px rgba(244, 63, 94, 0.3)" : "none",
+            }}
+          >
+            {isRecording ? (
+              <>
+                <Circle size={8} fill="#f43f5e" color="#f43f5e" className="animate-pulse" />
+                <span style={{ fontFamily: "var(--font-mono)" }}>
+                  REC {Math.floor(recordingTimer / 60).toString().padStart(2, "0")}:{(recordingTimer % 60).toString().padStart(2, "0")}
+                </span>
+              </>
+            ) : (
+              <>
+                <Video size={12} />
+                <span>Record</span>
+              </>
+            )}
+          </button>
+        )}
+
         {/* Theme Picker Dropdown */}
         <div style={{ position: "relative" }}>
           <button
@@ -255,7 +326,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
                 position: "absolute",
                 top: "34px",
                 right: 0,
-                width: "180px",
+                width: "190px",
                 backgroundColor: "#0d1424",
                 border: "1px solid rgba(255, 255, 255, 0.15)",
                 borderRadius: "8px",
@@ -300,6 +371,32 @@ export const TitleBar: React.FC<TitleBarProps> = ({
                   <span>{th.name}</span>
                 </button>
               ))}
+
+              <div style={{ height: "1px", backgroundColor: "rgba(255, 255, 255, 0.08)", margin: "4px 0" }} />
+
+              <button
+                onClick={() => {
+                  setShowThemeMenu(false);
+                  onOpenThemeEditor?.();
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "6px 8px",
+                  borderRadius: "5px",
+                  border: "none",
+                  background: "rgba(6, 182, 212, 0.1)",
+                  color: "#22d3ee",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                <Palette size={12} />
+                <span>Theme Studio...</span>
+              </button>
             </div>
           )}
         </div>

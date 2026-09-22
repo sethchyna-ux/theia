@@ -21,9 +21,10 @@ export interface TerminalTheme {
   brightMagenta: string;
   brightCyan: string;
   brightWhite: string;
+  isCustom?: boolean;
 }
 
-export const TERMINAL_THEMES: Record<string, TerminalTheme> = {
+export const BUILTIN_THEMES: Record<string, TerminalTheme> = {
   obsidian: {
     id: "obsidian",
     name: "Obsidian Slate",
@@ -144,6 +145,78 @@ export const TERMINAL_THEMES: Record<string, TerminalTheme> = {
     brightCyan: "#8fbcbb",
     brightWhite: "#eceff4",
   },
+  solarizedDark: {
+    id: "solarizedDark",
+    name: "Solarized Dark",
+    background: "#002b36",
+    foreground: "#839496",
+    cursor: "#2aa198",
+    selectionBackground: "rgba(7, 54, 66, 0.5)",
+    black: "#073642",
+    red: "#dc322f",
+    green: "#859900",
+    yellow: "#b58900",
+    blue: "#268bd2",
+    magenta: "#d33682",
+    cyan: "#2aa198",
+    white: "#eee8d5",
+    brightBlack: "#586e75",
+    brightRed: "#cb4b16",
+    brightGreen: "#586e75",
+    brightYellow: "#657b83",
+    brightBlue: "#839496",
+    brightMagenta: "#6c71c4",
+    brightCyan: "#93a1a1",
+    brightWhite: "#fdf6e3",
+  },
+  monokai: {
+    id: "monokai",
+    name: "Monokai Pro",
+    background: "#2d2a2e",
+    foreground: "#fcfcfa",
+    cursor: "#ffd866",
+    selectionBackground: "rgba(255, 216, 102, 0.25)",
+    black: "#403e41",
+    red: "#ff6188",
+    green: "#a9dc76",
+    yellow: "#ffd866",
+    blue: "#78dce8",
+    magenta: "#ab9df2",
+    cyan: "#78dce8",
+    white: "#fcfcfa",
+    brightBlack: "#727072",
+    brightRed: "#ff6188",
+    brightGreen: "#a9dc76",
+    brightYellow: "#ffd866",
+    brightBlue: "#78dce8",
+    brightMagenta: "#ab9df2",
+    brightCyan: "#78dce8",
+    brightWhite: "#ffffff",
+  },
+  synthwave: {
+    id: "synthwave",
+    name: "Synthwave '84",
+    background: "#262335",
+    foreground: "#f92aad",
+    cursor: "#36f9f6",
+    selectionBackground: "rgba(254, 68, 169, 0.3)",
+    black: "#241b2f",
+    red: "#fe4450",
+    green: "#72f1b8",
+    yellow: "#fede5d",
+    blue: "#03edf9",
+    magenta: "#ff7edb",
+    cyan: "#03edf9",
+    white: "#ffffff",
+    brightBlack: "#614d85",
+    brightRed: "#fe4450",
+    brightGreen: "#72f1b8",
+    brightYellow: "#fede5d",
+    brightBlue: "#03edf9",
+    brightMagenta: "#ff7edb",
+    brightCyan: "#03edf9",
+    brightWhite: "#ffffff",
+  },
   matrix: {
     id: "matrix",
     name: "Matrix Green",
@@ -169,3 +242,41 @@ export const TERMINAL_THEMES: Record<string, TerminalTheme> = {
     brightWhite: "#bbf7d0",
   },
 };
+
+const CUSTOM_THEMES_STORAGE_KEY = "theia_custom_terminal_themes";
+
+export function loadCustomThemes(): Record<string, TerminalTheme> {
+  try {
+    const raw = localStorage.getItem(CUSTOM_THEMES_STORAGE_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw);
+  } catch (_) {
+    return {};
+  }
+}
+
+export function saveCustomTheme(theme: TerminalTheme): void {
+  const current = loadCustomThemes();
+  current[theme.id] = { ...theme, isCustom: true };
+  localStorage.setItem(CUSTOM_THEMES_STORAGE_KEY, JSON.stringify(current));
+  updateThemesRegistry();
+}
+
+export function deleteCustomTheme(id: string): void {
+  const current = loadCustomThemes();
+  delete current[id];
+  localStorage.setItem(CUSTOM_THEMES_STORAGE_KEY, JSON.stringify(current));
+  updateThemesRegistry();
+}
+
+export function getAllThemes(): Record<string, TerminalTheme> {
+  const custom = loadCustomThemes();
+  return { ...BUILTIN_THEMES, ...custom };
+}
+
+// Global active themes registry for xterm and components
+export let TERMINAL_THEMES: Record<string, TerminalTheme> = { ...BUILTIN_THEMES, ...loadCustomThemes() };
+
+export function updateThemesRegistry() {
+  TERMINAL_THEMES = getAllThemes();
+}

@@ -20,6 +20,7 @@ interface TerminalViewProps {
   broadcastMode?: boolean;
   onBroadcastInput?: (data: string) => void;
   onOpenPathInEditor?: (path: string) => void;
+  onTerminalOutput?: (sessionId: string, data: string) => void;
 }
 
 export const TerminalView: React.FC<TerminalViewProps> = ({
@@ -33,6 +34,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   broadcastMode,
   onBroadcastInput,
   onOpenPathInEditor,
+  onTerminalOutput,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -128,6 +130,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     const unlistenDataPromise = listen<string>(`ssh-data-${sessionId}`, (event) => {
       const payload = event.payload;
       term.write(payload);
+      if (onTerminalOutput) {
+        onTerminalOutput(sessionId, payload);
+      }
 
       // Check if a background command finished
       if (isCommandRunningRef.current && lastCommandStartTimeRef.current) {

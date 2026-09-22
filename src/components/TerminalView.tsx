@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { HostConfig } from "../types";
 import { TERMINAL_THEMES } from "../themes";
-import { Search, ChevronDown, ChevronUp, X, ZoomIn, ZoomOut, Terminal as TermIcon, Download } from "lucide-react";
+import { Search, ChevronDown, ChevronUp, X, ZoomIn, ZoomOut, Terminal as TermIcon, Download, UploadCloud, FileUp, CheckCircle2, AlertCircle } from "lucide-react";
 import { TerminalContextMenu } from "./TerminalContextMenu";
 
 interface TerminalViewProps {
@@ -55,6 +55,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   // Command duration tracker for background notifications
   const lastCommandStartTimeRef = useRef<number | null>(null);
   const isCommandRunningRef = useRef<boolean>(false);
+
+  // Drag & drop file upload state
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [droppedFile, setDroppedFile] = useState<File | null>(null);
+  const [destPath, setDestPath] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const isLocal = host.source === "local" || host.id.startsWith("local_");
 
@@ -333,6 +340,75 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     URL.revokeObjectURL(url);
   };
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+
+    if (isLocal) {
+      // In local macOS shell, paste the escaped path directly (standard macOS terminal behavior)
+      const path = (file as any).path || file.name;
+      const escaped = path.replace(/(["\s'$`\\])/g, "\\$1");
+      invoke("ssh_send_data", { sessionId, data: `${escaped} ` });
+      return;
+    }
+
+    // Remote SSH session: open drop modal
+    setDroppedFile(file);
+    setDestPath(`/tmp/${file.name}`);
+    setUploadMessage(null);
+  };
+
+  const handleUploadFile = async () => {
+    if (!droppedFile) return;
+    setIsUploading(true);
+    setUploadMessage(null);
+
+    try {
+      const buffer = await droppedFile.arrayBuffer();
+      const bytes = Array.from(new Uint8Array(buffer));
+      await invoke("sftp_write_binary", {
+        sessionId,
+        path: destPath,
+        data: bytes,
+      });
+
+      invoke("ssh_send_data", { sessionId, data: ` "${destPath}" ` });
+      setUploadMessage({ type: "success", text: `Uploaded to ${destPath}` });
+      setTimeout(() => {
+        setDroppedFile(null);
+        setIsUploading(false);
+        setUploadMessage(null);
+      }, 1400);
+    } catch (err) {
+      setUploadMessage({ type: "error", text: String(err) });
+      setIsUploading(false);
+    }
+  };
+
+  const handlePasteFileName = () => {
+    if (!droppedFile) return;
+    const escaped = droppedFile.name.replace(/(["\s'$`\\])/g, "\\$1");
+    invoke("ssh_send_data", { sessionId, data: ` "${escaped}" ` });
+    setDroppedFile(null);
+  };
+
   // Focus terminal when pane becomes active
   useEffect(() => {
     if (isActive && termRef.current) {
@@ -343,6 +419,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   return (
     <div
       onClick={onFocus}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
       style={{
         width: "100%",
         height: "100%",
@@ -352,6 +431,185 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         overflow: "hidden",
       }}
     >
+      {/* Dragging Over Visual Feedback */}
+      {isDraggingOver && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 50,
+            backgroundColor: "rgba(6, 182, 212, 0.12)",
+            backdropFilter: "blur(6px)",
+            border: "2px dashed #06b6d4",
+            borderRadius: "6px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "10px",
+            pointerEvents: "none",
+          }}
+        >
+          <div
+            style={{
+              padding: "16px",
+              borderRadius: "50%",
+              backgroundColor: "rgba(6, 182, 212, 0.2)",
+              color: "#22d3ee",
+            }}
+          >
+            <UploadCloud size={32} />
+          </div>
+          <span style={{ fontSize: "14px", fontWeight: "600", color: "#f8fafc" }}>
+            {isLocal ? "Drop to Paste Escaped Path" : "Drop to Upload via SFTP or Paste Path"}
+          </span>
+          <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+            {isLocal ? "Local Terminal (zsh)" : `Remote Host: ${host.name}`}
+          </span>
+        </div>
+      )}
+
+      {/* Dropped File Upload / Paste Modal */}
+      {droppedFile && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 60,
+            backgroundColor: "rgba(0, 0, 0, 0.75)",
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#0d1424",
+              border: "1px solid rgba(6, 182, 212, 0.3)",
+              borderRadius: "12px",
+              padding: "20px",
+              width: "420px",
+              boxShadow: "0 20px 40px -10px rgba(0, 0, 0, 0.7)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "14px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div
+                  style={{
+                    padding: "8px",
+                    borderRadius: "8px",
+                    backgroundColor: "rgba(6, 182, 212, 0.15)",
+                    color: "#06b6d4",
+                  }}
+                >
+                  <FileUp size={20} />
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: "14px", fontWeight: "600", color: "#f8fafc" }}>
+                    File Dropped into Terminal
+                  </h4>
+                  <span style={{ fontSize: "11px", color: "#94a3b8" }}>
+                    {droppedFile.name} ({(droppedFile.size / 1024).toFixed(1)} KB)
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setDroppedFile(null)}
+                style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", padding: "4px" }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Destination path input */}
+            <div>
+              <label style={{ display: "block", fontSize: "11px", color: "#94a3b8", marginBottom: "4px" }}>
+                Remote Destination Path
+              </label>
+              <input
+                type="text"
+                value={destPath}
+                onChange={(e) => setDestPath(e.target.value)}
+                disabled={isUploading}
+                style={{
+                  width: "100%",
+                  backgroundColor: "#060911",
+                  border: "1px solid rgba(255, 255, 255, 0.12)",
+                  borderRadius: "6px",
+                  padding: "8px 10px",
+                  color: "#f8fafc",
+                  fontSize: "12px",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            {uploadMessage && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "12px",
+                  color: uploadMessage.type === "success" ? "#10b981" : "#f43f5e",
+                  backgroundColor: uploadMessage.type === "success" ? "rgba(16, 185, 129, 0.1)" : "rgba(244, 63, 94, 0.1)",
+                  padding: "6px 10px",
+                  borderRadius: "6px",
+                }}
+              >
+                {uploadMessage.type === "success" ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                <span>{uploadMessage.text}</span>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px", marginTop: "4px" }}>
+              <button
+                onClick={handlePasteFileName}
+                disabled={isUploading}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: "6px",
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  backgroundColor: "rgba(255, 255, 255, 0.05)",
+                  color: "#cbd5e1",
+                  fontSize: "12px",
+                  cursor: "pointer",
+                }}
+              >
+                Paste Name Only
+              </button>
+              <button
+                onClick={handleUploadFile}
+                disabled={isUploading || !destPath.trim()}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "6px 14px",
+                  borderRadius: "6px",
+                  border: "none",
+                  backgroundColor: "#06b6d4",
+                  color: "#080c14",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  cursor: isUploading ? "wait" : "pointer",
+                }}
+              >
+                <UploadCloud size={14} />
+                <span>{isUploading ? "Uploading..." : "Upload via SFTP"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Search Bar Overlay (Cmd+F) */}
       {showSearch && (
         <div

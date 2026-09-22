@@ -50,6 +50,7 @@ pub struct ActiveSession {
     pub input_tx: mpsc::Sender<Vec<u8>>,
     pub resize_tx: mpsc::Sender<(u32, u32)>,
     pub sftp: SftpManager,
+    pub _bastion_handle: Option<russh::client::Handle<SimpleClientHandler>>,
 }
 
 #[derive(Clone)]
@@ -124,18 +125,90 @@ impl SessionManager {
             port: host.port,
         };
 
-        let connect_fut = russh::client::connect(
-            Arc::new(config),
-            (host.hostname.as_str(), host.port),
-            handler,
-        );
+        // Check if connecting via Bastion / Jump Host (ProxyJump)
+        let (mut session, bastion_handle_opt) = if let Some(ref bastion_id) = host.bastion_id {
+            if !bastion_id.trim().is_empty() {
+                let all_hosts = crate::hosts::get_all_hosts();
+                let bastion = all_hosts
+                    .into_iter()
+                    .find(|h| h.id == *bastion_id || h.name == *bastion_id)
+                    .ok_or_else(|| format!("Bastion host '{bastion_id}' not found in bookmarks or ssh_config"))?;
 
-        let mut session = tokio::time::timeout(Duration::from_secs(15), connect_fut)
-            .await
-            .map_err(|_| "Connection timed out after 15 seconds".to_string())?
-            .map_err(|e| format!("SSH connect error: {e}"))?;
+                let b_username = if let Some(ref u) = bastion.user {
+                    u.clone()
+                } else if let Ok(u) = std::env::var("USER") {
+                    u
+                } else {
+                    "root".to_string()
+                };
 
-        // Authenticate
+                let mut b_config = russh::client::Config::default();
+                b_config.nodelay = true;
+                b_config.keepalive_interval = Some(Duration::from_secs(30));
+
+                let b_handler = SimpleClientHandler {
+                    host: bastion.hostname.clone(),
+                    port: bastion.port,
+                };
+
+                let b_connect_fut = russh::client::connect(
+                    Arc::new(b_config),
+                    (bastion.hostname.as_str(), bastion.port),
+                    b_handler,
+                );
+
+                let mut b_session = tokio::time::timeout(Duration::from_secs(15), b_connect_fut)
+                    .await
+                    .map_err(|_| format!("Bastion '{bastion_id}' connection timed out after 15 seconds"))?
+                    .map_err(|e| format!("Bastion '{bastion_id}' connect error: {e}"))?;
+
+                authenticate_session(&mut b_session, &b_username, &bastion)
+                    .await
+                    .map_err(|e| format!("Bastion '{bastion_id}' authentication failed: {e}"))?;
+
+                // Open direct-tcpip channel on bastion to target host
+                let tcpip_channel = b_session
+                    .channel_open_direct_tcpip(host.hostname.as_str(), host.port as u32, "127.0.0.1", 22)
+                    .await
+                    .map_err(|e| format!("Bastion ProxyJump channel opening to {}:{} failed: {e}", host.hostname, host.port))?;
+
+                let stream = tcpip_channel.into_stream();
+
+                let target_session = russh::client::connect_stream(
+                    Arc::new(config),
+                    stream,
+                    handler,
+                )
+                .await
+                .map_err(|e| format!("Target connection over Bastion stream failed: {e}"))?;
+
+                (target_session, Some(b_session))
+            } else {
+                let connect_fut = russh::client::connect(
+                    Arc::new(config),
+                    (host.hostname.as_str(), host.port),
+                    handler,
+                );
+                let s = tokio::time::timeout(Duration::from_secs(15), connect_fut)
+                    .await
+                    .map_err(|_| "Connection timed out after 15 seconds".to_string())?
+                    .map_err(|e| format!("SSH connect error: {e}"))?;
+                (s, None)
+            }
+        } else {
+            let connect_fut = russh::client::connect(
+                Arc::new(config),
+                (host.hostname.as_str(), host.port),
+                handler,
+            );
+            let s = tokio::time::timeout(Duration::from_secs(15), connect_fut)
+                .await
+                .map_err(|_| "Connection timed out after 15 seconds".to_string())?
+                .map_err(|e| format!("SSH connect error: {e}"))?;
+            (s, None)
+        };
+
+        // Authenticate target session
         authenticate_session(&mut session, &username, &host).await?;
 
         // Open Shell Channel
@@ -233,6 +306,7 @@ impl SessionManager {
                 input_tx,
                 resize_tx,
                 sftp: SftpManager::new(None),
+                _bastion_handle: bastion_handle_opt,
             },
         );
 

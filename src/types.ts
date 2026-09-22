@@ -75,5 +75,18 @@ export interface SessionTab {
   active: boolean;
 }
 
+export interface PingResult {
+  rtt_ms: number;
+  success: boolean;
+  error?: string;
+}
+
+export interface PortProbeResult {
+  port: number;
+  open: boolean;
+  service: string;
+  rtt_ms?: number;
+}
+
 export type SplitLayout = "single" | "vertical" | "horizontal" | "grid";
 export type ActiveView = "terminal" | "sftp" | "tunnels" | "snippets" | "vault";

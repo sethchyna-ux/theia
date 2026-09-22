@@ -93,6 +93,13 @@ impl SftpManager {
         Ok(())
     }
 
+    pub async fn write_binary(&self, path: &str, data: &[u8]) -> Result<(), String> {
+        let lock = self.session.lock().await;
+        let sftp = lock.as_ref().ok_or("SFTP session not active")?;
+        sftp.write(path, data).await.map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     pub async fn create_dir(&self, path: &str) -> Result<(), String> {
         let lock = self.session.lock().await;
         let sftp = lock.as_ref().ok_or("SFTP session not active")?;

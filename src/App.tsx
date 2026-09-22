@@ -344,7 +344,8 @@ export const App: React.FC = () => {
               <ResourceMonitor
                 visible={hudVisible && tabs.length > 0}
                 onClose={() => setHudVisible(false)}
-                hostname={activeTab?.host.name}
+                hostname={activeTab?.host.hostname || activeTab?.host.name}
+                port={activeTab?.host.port}
               />
               {/* Terminal Split Panes */}
               <div style={{ flex: 1, height: "100%", width: "100%", overflow: "hidden" }}>

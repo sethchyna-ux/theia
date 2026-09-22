@@ -3,6 +3,7 @@ mod keychain;
 mod known_hosts;
 mod local_pty;
 mod models;
+mod network;
 mod session;
 mod sftp;
 mod snippets;
@@ -165,6 +166,21 @@ async fn sftp_write(
     let map = state.sftp_sessions.lock().await;
     if let Some(sftp) = map.get(&session_id) {
         sftp.write_file(&path, &content).await
+    } else {
+        Err("SFTP session not ready".to_string())
+    }
+}
+
+#[tauri::command]
+async fn sftp_write_binary(
+    state: State<'_, AppState>,
+    session_id: String,
+    path: String,
+    data: Vec<u8>,
+) -> Result<(), String> {
+    let map = state.sftp_sessions.lock().await;
+    if let Some(sftp) = map.get(&session_id) {
+        sftp.write_binary(&path, &data).await
     } else {
         Err("SFTP session not ready".to_string())
     }
@@ -380,6 +396,17 @@ fn send_native_notification(
     Ok(())
 }
 
+// ---------------------- Network Diagnostics Commands ----------------------
+#[tauri::command]
+async fn ping_host(host: String, port: u16) -> network::PingResult {
+    network::ping_host(&host, port).await
+}
+
+#[tauri::command]
+async fn probe_ports(host: String) -> Vec<network::PortProbeResult> {
+    network::probe_ports(&host).await
+}
+
 // ---------------------- App Entrypoint ----------------------
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -415,6 +442,7 @@ pub fn run() {
             sftp_list,
             sftp_read,
             sftp_write,
+            sftp_write_binary,
             sftp_mkdir,
             sftp_delete,
             sftp_rename,
@@ -435,6 +463,8 @@ pub fn run() {
             get_known_hosts,
             remove_known_host,
             send_native_notification,
+            ping_host,
+            probe_ports,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

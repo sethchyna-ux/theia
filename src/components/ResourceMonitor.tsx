@@ -8,23 +8,35 @@ import {
   ChevronDown,
   X,
   Gauge,
+  Wifi,
+  Radio,
+  Search,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { ServerTelemetry } from "../types";
+import { ServerTelemetry, PingResult, PortProbeResult } from "../types";
 
 interface ResourceMonitorProps {
   visible: boolean;
   onClose: () => void;
   hostname?: string;
+  port?: number;
 }
 
 export const ResourceMonitor: React.FC<ResourceMonitorProps> = ({
   visible,
   onClose,
   hostname,
+  port = 22,
 }) => {
   const [telemetry, setTelemetry] = useState<ServerTelemetry | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [showNetwork, setShowNetwork] = useState(false);
+
+  // Network Diagnostic State
+  const [currentPing, setCurrentPing] = useState<number | null>(null);
+  const [pingHistory, setPingHistory] = useState<number[]>([]);
+  const [probeResults, setProbeResults] = useState<PortProbeResult[]>([]);
+  const [isProbing, setIsProbing] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
@@ -50,6 +62,56 @@ export const ResourceMonitor: React.FC<ResourceMonitorProps> = ({
     const timer = setInterval(fetchTelemetry, 3000);
     return () => clearInterval(timer);
   }, [visible]);
+
+  // Network Ping Polling
+  useEffect(() => {
+    if (!visible || !hostname) return;
+
+    let isMounted = true;
+    const runPing = async () => {
+      try {
+        const res = await invoke<PingResult>("ping_host", { host: hostname, port: port || 22 });
+        if (isMounted) {
+          if (res.success) {
+            setCurrentPing(res.rtt_ms);
+            setPingHistory((prev) => [...prev.slice(-19), res.rtt_ms]);
+          } else {
+            setCurrentPing(null);
+          }
+        }
+      } catch (_) {
+        if (isMounted) setCurrentPing(null);
+      }
+    };
+
+    runPing();
+    const pingTimer = setInterval(runPing, 2000);
+    return () => {
+      isMounted = false;
+      clearInterval(pingTimer);
+    };
+  }, [visible, hostname, port]);
+
+  const handleProbePorts = async () => {
+    if (!hostname || isProbing) return;
+    setIsProbing(true);
+    try {
+      const results = await invoke<PortProbeResult[]>("probe_ports", { host: hostname });
+      setProbeResults(results);
+    } catch (err) {
+      console.error("Port probe failed:", err);
+    } finally {
+      setIsProbing(false);
+    }
+  };
+
+  // Calculate Jitter (std dev)
+  const calculateJitter = () => {
+    if (pingHistory.length < 2) return 0;
+    const mean = pingHistory.reduce((a, b) => a + b, 0) / pingHistory.length;
+    const variance = pingHistory.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / pingHistory.length;
+    return Math.round(Math.sqrt(variance) * 10) / 10;
+  };
 
   if (!visible || !telemetry) return null;
 
@@ -119,10 +181,60 @@ export const ResourceMonitor: React.FC<ResourceMonitorProps> = ({
             <Activity size={12} color="#06b6d4" />
             <span>Load: {telemetry.load_avg}</span>
           </div>
+
+          {hostname && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                fontSize: "11px",
+                padding: "2px 8px",
+                borderRadius: "12px",
+                backgroundColor: "rgba(255, 255, 255, 0.04)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+              }}
+            >
+              <Wifi size={12} color={currentPing !== null ? (currentPing < 80 ? "#10b981" : currentPing < 160 ? "#f59e0b" : "#f43f5e") : "#64748b"} />
+              <span style={{ color: "#94a3b8" }}>RTT:</span>
+              <span
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontWeight: "600",
+                  color: currentPing !== null ? (currentPing < 80 ? "#10b981" : currentPing < 160 ? "#f59e0b" : "#f43f5e") : "#64748b",
+                }}
+              >
+                {currentPing !== null ? `${currentPing} ms` : "Probing..."}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Right: Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          {hostname && (
+            <button
+              onClick={() => setShowNetwork(!showNetwork)}
+              title="Toggle Network & Port Diagnostics"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                background: showNetwork ? "rgba(6, 182, 212, 0.2)" : "rgba(255, 255, 255, 0.05)",
+                border: showNetwork ? "1px solid rgba(6, 182, 212, 0.4)" : "1px solid rgba(255, 255, 255, 0.08)",
+                borderRadius: "4px",
+                color: showNetwork ? "#06b6d4" : "#94a3b8",
+                fontSize: "11px",
+                cursor: "pointer",
+                padding: "2px 8px",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <Radio size={12} />
+              <span>Network</span>
+            </button>
+          )}
+
           <button
             onClick={() => setCollapsed(!collapsed)}
             title={collapsed ? "Expand HUD" : "Collapse HUD"}
@@ -338,6 +450,146 @@ export const ResourceMonitor: React.FC<ResourceMonitorProps> = ({
                 }}
               />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Network Diagnostics Drawer */}
+      {!collapsed && showNetwork && hostname && (
+        <div
+          style={{
+            marginTop: "4px",
+            padding: "10px 14px",
+            backgroundColor: "rgba(6, 11, 20, 0.7)",
+            borderRadius: "6px",
+            border: "1px solid rgba(6, 182, 212, 0.2)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+              <span style={{ fontSize: "11px", fontWeight: "600", color: "#06b6d4", display: "flex", alignItems: "center", gap: "5px" }}>
+                <Wifi size={13} /> Network Latency & Jitter Monitor
+              </span>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "11px" }}>
+                <span style={{ color: "#94a3b8" }}>
+                  Latency:{" "}
+                  <strong style={{ color: currentPing !== null ? (currentPing < 80 ? "#10b981" : "#f59e0b") : "#64748b" }}>
+                    {currentPing !== null ? `${currentPing} ms` : "---"}
+                  </strong>
+                </span>
+                <span style={{ color: "#94a3b8" }}>
+                  Jitter: <strong style={{ color: "#e2e8f0" }}>±{calculateJitter()} ms</strong>
+                </span>
+                <span style={{ color: "#94a3b8" }}>
+                  Samples: <strong style={{ color: "#e2e8f0" }}>{pingHistory.length}</strong>
+                </span>
+              </div>
+            </div>
+
+            {/* Sparkline */}
+            {pingHistory.length > 1 && (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "10px", color: "#64748b" }}>RTT Trend</span>
+                <svg width="120" height="20" style={{ overflow: "visible" }}>
+                  {(() => {
+                    const min = Math.min(...pingHistory);
+                    const max = Math.max(...pingHistory);
+                    const range = max - min || 1;
+                    const points = pingHistory
+                      .map((val, idx) => {
+                        const x = (idx / (pingHistory.length - 1)) * 120;
+                        const y = 18 - ((val - min) / range) * 16;
+                        return `${x},${y}`;
+                      })
+                      .join(" ");
+
+                    return (
+                      <>
+                        <polyline
+                          fill="none"
+                          stroke="#06b6d4"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          points={points}
+                        />
+                      </>
+                    );
+                  })()}
+                </svg>
+              </div>
+            )}
+          </div>
+
+          {/* Port Prober Section */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "6px", borderTop: "1px solid rgba(255, 255, 255, 0.05)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <span style={{ fontSize: "11px", color: "#94a3b8", display: "flex", alignItems: "center", gap: "4px" }}>
+                <Search size={12} /> Standard Ports:
+              </span>
+
+              {probeResults.length === 0 ? (
+                <span style={{ fontSize: "11px", color: "#64748b", fontStyle: "italic" }}>
+                  Click probe to check TCP status for SSH, HTTP, DB, and Cache ports
+                </span>
+              ) : (
+                probeResults.map((p) => (
+                  <div
+                    key={p.port}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      backgroundColor: p.open ? "rgba(16, 185, 129, 0.12)" : "rgba(244, 63, 94, 0.08)",
+                      border: p.open ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(244, 63, 94, 0.2)",
+                      fontSize: "11px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: "6px",
+                        height: "6px",
+                        borderRadius: "50%",
+                        backgroundColor: p.open ? "#10b981" : "#f43f5e",
+                      }}
+                    />
+                    <span style={{ fontWeight: "600", color: p.open ? "#10b981" : "#94a3b8" }}>
+                      {p.port}
+                    </span>
+                    <span style={{ fontSize: "10px", color: "#64748b" }}>{p.service}</span>
+                    {p.rtt_ms && <span style={{ fontSize: "9px", color: "#10b981" }}>{p.rtt_ms}ms</span>}
+                  </div>
+                ))
+              )}
+            </div>
+
+            <button
+              onClick={handleProbePorts}
+              disabled={isProbing}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "3px 10px",
+                backgroundColor: isProbing ? "rgba(255, 255, 255, 0.05)" : "rgba(6, 182, 212, 0.15)",
+                border: "1px solid rgba(6, 182, 212, 0.3)",
+                borderRadius: "4px",
+                color: isProbing ? "#64748b" : "#06b6d4",
+                fontSize: "11px",
+                fontWeight: "500",
+                cursor: isProbing ? "not-allowed" : "pointer",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <Radio size={12} className={isProbing ? "animate-pulse" : ""} />
+              <span>{isProbing ? "Probing Ports..." : "Probe Ports"}</span>
+            </button>
           </div>
         </div>
       )}

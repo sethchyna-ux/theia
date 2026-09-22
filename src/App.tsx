@@ -9,6 +9,7 @@ import { SnippetLibrary } from "./components/SnippetLibrary";
 import { KeyVault } from "./components/KeyVault";
 import { ResourceMonitor } from "./components/ResourceMonitor";
 import { HostModal } from "./components/HostModal";
+import { CommandPalette } from "./components/CommandPalette";
 import { ActiveView, HostConfig, SessionTab, SplitLayout } from "./types";
 
 export const App: React.FC = () => {
@@ -26,6 +27,9 @@ export const App: React.FC = () => {
   // Host modal state
   const [isHostModalOpen, setIsHostModalOpen] = useState(false);
   const [editingHost, setEditingHost] = useState<HostConfig | null>(null);
+
+  // Command palette state (Spotlight / Raycast style ⌘K)
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
   // Load all hosts on startup
   const refreshHosts = async () => {
@@ -73,9 +77,85 @@ export const App: React.FC = () => {
     }
   };
 
+  // Spawn a native macOS PTY terminal tab (zsh)
+  const handleNewLocalTab = () => {
+    const sessionId = `local_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const localHost: HostConfig = {
+      id: sessionId,
+      name: "Local Terminal",
+      hostname: "localhost",
+      port: 0,
+      source: "local",
+      tags: ["local", "zsh"],
+    };
+
+    const newTab: SessionTab = {
+      id: sessionId,
+      host: localHost,
+      title: "Local (zsh)",
+      connected: true,
+      active: true,
+    };
+
+    setTabs((prev) => [...prev, newTab]);
+    setActiveTabId(sessionId);
+    setActiveView("terminal");
+  };
+
+  // Start with hosts loaded and an initial local terminal tab
   useEffect(() => {
     refreshHosts();
+    handleNewLocalTab();
   }, []);
+
+  // Native macOS keyboard shortcuts: ⌘T, ⌘W, ⌘K, ⌘B, ⌘H, ⌘1-9
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isCmd = e.metaKey || e.ctrlKey;
+      if (!isCmd) return;
+
+      if (e.key.toLowerCase() === "t" && !e.shiftKey) {
+        e.preventDefault();
+        handleNewLocalTab();
+      } else if (e.key.toLowerCase() === "n" && !e.shiftKey) {
+        e.preventDefault();
+        setEditingHost(null);
+        setIsHostModalOpen(true);
+      } else if (e.key.toLowerCase() === "w" && !e.shiftKey) {
+        e.preventDefault();
+        if (activeTabId) {
+          handleCloseTab(activeTabId);
+        }
+      } else if (e.key.toLowerCase() === "k" || e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+      } else if (e.key.toLowerCase() === "b" && !e.shiftKey) {
+        e.preventDefault();
+        setBroadcastMode((prev) => !prev);
+      } else if (e.key.toLowerCase() === "h" && !e.shiftKey) {
+        e.preventDefault();
+        setHudVisible((prev) => !prev);
+      } else if (e.shiftKey && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        setSplitLayout("vertical");
+        setActiveView("terminal");
+      } else if (e.shiftKey && e.key.toLowerCase() === "e") {
+        e.preventDefault();
+        setSplitLayout("horizontal");
+        setActiveView("terminal");
+      } else if (e.key >= "1" && e.key <= "9") {
+        const idx = parseInt(e.key, 10) - 1;
+        if (tabs[idx]) {
+          e.preventDefault();
+          setActiveTabId(tabs[idx].id);
+          setActiveView("terminal");
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [tabs, activeTabId]);
 
   // Connect to host and create session tab
   const handleConnectHost = (host: HostConfig) => {
@@ -173,10 +253,12 @@ export const App: React.FC = () => {
           setActiveView("terminal");
         }}
         onCloseTab={handleCloseTab}
+        onNewLocalTab={handleNewLocalTab}
         onNewConnection={() => {
           setEditingHost(null);
           setIsHostModalOpen(true);
         }}
+        onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         broadcastMode={broadcastMode}
         onToggleBroadcast={() => setBroadcastMode(!broadcastMode)}
         hudVisible={hudVisible}
@@ -259,6 +341,22 @@ export const App: React.FC = () => {
         onSave={handleSaveHost}
         existingHost={editingHost}
         allHosts={hosts}
+      />
+
+      {/* Spotlight / Raycast Style Command Palette (⌘K) */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        hosts={hosts}
+        onConnectHost={handleConnectHost}
+        onNewLocalTab={handleNewLocalTab}
+        onChangeView={setActiveView}
+        onToggleBroadcast={() => setBroadcastMode(!broadcastMode)}
+        broadcastMode={broadcastMode}
+        onToggleHud={() => setHudVisible(!hudVisible)}
+        hudVisible={hudVisible}
+        onChangeSplitLayout={setSplitLayout}
+        onExecuteSnippet={handleExecuteSnippet}
       />
     </div>
   );

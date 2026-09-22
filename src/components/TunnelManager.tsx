@@ -160,13 +160,13 @@ export const TunnelManager: React.FC = () => {
                 fontSize: "11px",
                 padding: "2px 8px",
                 borderRadius: "12px",
-                background: "rgba(245, 158, 11, 0.15)",
-                color: "#fbbf24",
-                border: "1px solid rgba(245, 158, 11, 0.3)",
+                background: "rgba(6, 182, 212, 0.15)",
+                color: "#22d3ee",
+                border: "1px solid rgba(6, 182, 212, 0.3)",
                 fontWeight: 600,
               }}
             >
-              PRO UNLOCKED (FREE)
+              PORT FORWARDING
             </span>
           </div>
           <p style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>

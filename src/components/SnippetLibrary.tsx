@@ -233,7 +233,7 @@ export const SnippetLibrary: React.FC<SnippetLibraryProps> = ({
                 Snippet & Script Automation Library
               </h1>
               <p style={{ margin: "2px 0 0 0", fontSize: "13px", color: "#94a3b8" }}>
-                Multi-line commands with parameterized placeholders ({"{{variable}}"}) — 100% Free & Unlocked
+                Multi-line commands with parameterized placeholders ({"{{variable}}"})
               </p>
             </div>
           </div>
@@ -308,8 +308,7 @@ export const SnippetLibrary: React.FC<SnippetLibraryProps> = ({
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <Sparkles size={18} color="#c084fc" />
           <span style={{ fontSize: "13px", color: "#d8b4fe" }}>
-            <strong>Zero Paywalls:</strong> Commercial SSH tools charge up to $144/yr to save and share snippets.
-            In Theia SSH, unlimited templated multi-line automations and broadcast executions are always free.
+            <strong>Automation Engine:</strong> Reusable multi-line commands with interactive parameter prompts and one-click execution.
           </span>
         </div>
         <div style={{ fontSize: "12px", color: "#a855f7", fontWeight: "600" }}>

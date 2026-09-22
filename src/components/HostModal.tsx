@@ -410,7 +410,6 @@ export const HostModal: React.FC<HostModalProps> = ({
               <label style={{ fontSize: "12px", color: "#94a3b8", display: "flex", alignItems: "center", gap: "6px" }}>
                 <Route size={14} color="#06b6d4" /> Jump Host / Bastion Proxy (ProxyJump)
               </label>
-              <span style={{ fontSize: "11px", color: "#10b981", fontWeight: "500" }}>Unlocked</span>
             </div>
             <select
               value={bastionId}

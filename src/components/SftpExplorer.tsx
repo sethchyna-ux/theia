@@ -86,7 +86,7 @@ export const SftpExplorer: React.FC<SftpExplorerProps> = ({ tabs, activeTabId })
         // Fallback demo content
         setEditingFile({
           path: entry.path,
-          content: `# ${entry.name}\n# Remote file edited via Theia SSH (No paywall!)\n\nserver {\n    listen 80;\n    server_name example.com;\n    location / {\n        proxy_pass http://127.0.0.1:3000;\n    }\n}\n`,
+          content: `# ${entry.name}\n# Remote file edited via Theia SSH\n\nserver {\n    listen 80;\n    server_name example.com;\n    location / {\n        proxy_pass http://127.0.0.1:3000;\n    }\n}\n`,
         });
       }
     }

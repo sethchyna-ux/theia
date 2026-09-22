@@ -8,6 +8,9 @@ import {
   Rows2,
   Grid2X2,
   Square,
+  Terminal as TermIcon,
+  Server,
+  Command,
 } from "lucide-react";
 import { SessionTab, SplitLayout } from "../types";
 
@@ -16,6 +19,7 @@ interface TitleBarProps {
   activeTabId: string | null;
   onSelectTab: (id: string) => void;
   onCloseTab: (id: string) => void;
+  onNewLocalTab: () => void;
   onNewConnection: () => void;
   broadcastMode: boolean;
   onToggleBroadcast: () => void;
@@ -23,6 +27,7 @@ interface TitleBarProps {
   onToggleHud: () => void;
   splitLayout: SplitLayout;
   onChangeSplitLayout: (layout: SplitLayout) => void;
+  onOpenCommandPalette?: () => void;
 }
 
 export const TitleBar: React.FC<TitleBarProps> = ({
@@ -30,6 +35,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   activeTabId,
   onSelectTab,
   onCloseTab,
+  onNewLocalTab,
   onNewConnection,
   broadcastMode,
   onToggleBroadcast,
@@ -37,6 +43,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   onToggleHud,
   splitLayout,
   onChangeSplitLayout,
+  onOpenCommandPalette,
 }) => {
   return (
     <header
@@ -125,15 +132,45 @@ export const TitleBar: React.FC<TitleBarProps> = ({
           );
         })}
 
+        {/* New Local Terminal Button (⌘T) */}
+        <button
+          onClick={onNewLocalTab}
+          title="New Local Terminal (⌘T)"
+          style={{
+            background: "rgba(16, 185, 129, 0.1)",
+            border: "1px solid rgba(16, 185, 129, 0.3)",
+            borderRadius: "6px",
+            color: "#34d399",
+            padding: "5px 9px",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            fontSize: "11px",
+            fontWeight: 500,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "rgba(16, 185, 129, 0.2)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "rgba(16, 185, 129, 0.1)";
+          }}
+        >
+          <Plus size={12} />
+          <TermIcon size={12} />
+          <span>Terminal</span>
+        </button>
+
+        {/* New SSH Host Button (⌘N) */}
         <button
           onClick={onNewConnection}
-          title="New Connection Tab"
+          title="Connect to SSH Host (⌘N)"
           style={{
             background: "rgba(255, 255, 255, 0.04)",
             border: "1px dashed rgba(255, 255, 255, 0.15)",
             borderRadius: "6px",
             color: "#94a3b8",
-            padding: "5px 8px",
+            padding: "5px 9px",
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
@@ -149,14 +186,37 @@ export const TitleBar: React.FC<TitleBarProps> = ({
             e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.15)";
           }}
         >
-          <Plus size={13} />
-          <span>Connect</span>
+          <Server size={12} />
+          <span>Host</span>
         </button>
       </div>
 
-      {/* Right Controls: Broadcast, Split layout, HUD, Quick Connect */}
+      {/* Right Controls: Command Palette, Broadcast, Split layout, HUD */}
       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-        {/* Broadcast Mode Toggle (Paywalled Feature Unlocked!) */}
+        {onOpenCommandPalette && (
+          <button
+            onClick={onOpenCommandPalette}
+            title="Command Palette (⌘K)"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+              padding: "4px 8px",
+              borderRadius: "6px",
+              fontSize: "11px",
+              fontWeight: 500,
+              cursor: "pointer",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              background: "rgba(255, 255, 255, 0.04)",
+              color: "#cbd5e1",
+            }}
+          >
+            <Command size={11} color="#06b6d4" />
+            <span>⌘K</span>
+          </button>
+        )}
+
+        {/* Broadcast Mode Toggle */}
         <button
           onClick={onToggleBroadcast}
           title="Broadcast Mode (Multi-Exec): Type once to execute across all open terminal panes simultaneously"

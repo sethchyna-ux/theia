@@ -1,4 +1,5 @@
 mod hosts;
+mod local_pty;
 mod models;
 mod session;
 mod sftp;
@@ -7,6 +8,7 @@ mod tunnel;
 mod vault;
 
 use hosts::{get_all_hosts, load_bookmarks, save_bookmarks};
+use local_pty::LocalPtyManager;
 use models::{HostConfig, KeyPairInfo, RemoteFileEntry, ServerTelemetry, Snippet, TunnelConfig};
 use session::SessionManager;
 use sftp::SftpManager;
@@ -21,6 +23,7 @@ struct AppState {
     session_mgr: SessionManager,
     tunnel_mgr: TunnelManager,
     sftp_sessions: Arc<Mutex<std::collections::HashMap<String, SftpManager>>>,
+    local_pty_mgr: LocalPtyManager,
 }
 
 // ---------------------- Host Commands ----------------------
@@ -68,11 +71,29 @@ async fn ssh_connect(
 }
 
 #[tauri::command]
+async fn local_terminal_spawn(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+    cols: u32,
+    rows: u32,
+) -> Result<(), String> {
+    state
+        .local_pty_mgr
+        .spawn(app, session_id, cols as u16, rows as u16)
+        .await
+}
+
+#[tauri::command]
 async fn ssh_send_data(
     state: State<'_, AppState>,
     session_id: String,
     data: String,
 ) -> Result<(), String> {
+    let bytes = data.as_bytes();
+    if state.local_pty_mgr.write(&session_id, bytes).await.is_ok() {
+        return Ok(());
+    }
     state
         .session_mgr
         .send_input(&session_id, data.into_bytes())
@@ -86,11 +107,16 @@ async fn ssh_resize(
     cols: u32,
     rows: u32,
 ) -> Result<(), String> {
+    let _ = state
+        .local_pty_mgr
+        .resize(&session_id, cols as u16, rows as u16)
+        .await;
     state.session_mgr.resize(&session_id, cols, rows).await
 }
 
 #[tauri::command]
 async fn ssh_disconnect(state: State<'_, AppState>, session_id: String) -> Result<(), String> {
+    state.local_pty_mgr.close(&session_id).await;
     state.session_mgr.close(&session_id).await;
     let mut map = state.sftp_sessions.lock().await;
     map.remove(&session_id);
@@ -288,12 +314,14 @@ pub fn run() {
             session_mgr: SessionManager::new(),
             tunnel_mgr: TunnelManager::new(),
             sftp_sessions: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            local_pty_mgr: LocalPtyManager::new(),
         })
         .invoke_handler(tauri::generate_handler![
             get_hosts,
             save_host,
             delete_host,
             ssh_connect,
+            local_terminal_spawn,
             ssh_send_data,
             ssh_resize,
             ssh_disconnect,

@@ -104,7 +104,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <button
           onClick={() => onChangeView("sftp")}
-          title="SFTP File Explorer (No Paywall!)"
+          title="SFTP File Explorer"
           style={{
             width: "38px",
             height: "38px",

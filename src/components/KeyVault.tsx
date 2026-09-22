@@ -160,7 +160,7 @@ export const KeyVault: React.FC = () => {
         </button>
       </div>
 
-      {/* Zero Cloud Paywall Banner */}
+      {/* Local Encryption Banner */}
       <div
         style={{
           display: "flex",
@@ -176,8 +176,7 @@ export const KeyVault: React.FC = () => {
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <ShieldCheck size={18} color="#34d399" />
           <span style={{ fontSize: "13px", color: "#a7f3d0" }}>
-            <strong>100% Local & Encrypted:</strong> Unlike commercial SSH suites that lock key storage and export
-            behind cloud subscription tiers, your private keys never leave your machine or macOS secure enclave.
+            <strong>Local & Encrypted:</strong> Your private keys are stored securely in ~/.ssh and never leave your macOS device.
           </span>
         </div>
         <div style={{ fontSize: "12px", color: "#34d399", fontWeight: "600" }}>

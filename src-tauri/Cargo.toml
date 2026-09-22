@@ -10,10 +10,10 @@ name = "theia_gui_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.6.3" }
+tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
-tauri = { version = "2.11.6" }
+tauri = { version = "2.11.6", features = [] }
 tauri-plugin-log = "2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -27,3 +27,4 @@ bytes = "1"
 log = "0.4"
 rpassword = "7"
 async-trait = "0.1"
+portable-pty = "0.8"

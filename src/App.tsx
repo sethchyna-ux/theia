@@ -73,42 +73,7 @@ export const App: React.FC = () => {
       setHosts(data);
     } catch (err) {
       console.error("Failed to load hosts:", err);
-      // Fallback local bookmarks
-      setHosts([
-        {
-          id: "host_local",
-          name: "Localhost Development",
-          hostname: "127.0.0.1",
-          port: 22,
-          user: "yocan",
-          identity_file: "~/.ssh/id_ed25519",
-          group: "Local",
-          tags: ["local", "dev"],
-          source: "bookmark",
-        },
-        {
-          id: "host_prod_db",
-          name: "US-East Production Database",
-          hostname: "10.0.4.15",
-          port: 2222,
-          user: "postgres",
-          identity_file: "~/.ssh/id_rsa_legacy",
-          group: "Production",
-          tags: ["db", "prod", "east"],
-          source: "bookmark",
-        },
-        {
-          id: "host_k8s_worker",
-          name: "K8s Worker Node 01",
-          hostname: "10.0.12.8",
-          port: 22,
-          user: "ubuntu",
-          identity_file: "~/.ssh/id_ed25519",
-          group: "Production",
-          tags: ["k8s", "gpu"],
-          source: "bookmark",
-        },
-      ]);
+      setHosts([]);
     }
   };
 
@@ -175,10 +140,15 @@ export const App: React.FC = () => {
     }
   };
 
+  const hasInitializedRef = React.useRef(false);
+
   // Start with hosts loaded and an initial local terminal tab
   useEffect(() => {
-    refreshHosts();
-    handleNewLocalTab();
+    if (!hasInitializedRef.current) {
+      hasInitializedRef.current = true;
+      refreshHosts();
+      handleNewLocalTab();
+    }
   }, []);
 
   // Listen for macOS System Tray Quick-Connect and new terminal events

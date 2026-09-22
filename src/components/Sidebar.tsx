@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   Terminal as TermIcon,
   FolderGit2,
@@ -43,6 +43,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [isManageOpen, setIsManageOpen] = useState(false);
   const [manageSearch, setManageSearch] = useState("");
+  const [confirmDeleteHostId, setConfirmDeleteHostId] = useState<string | null>(null);
+  const deleteTimerRef = useRef<any>(null);
+
+  const handleDeleteClick = (e: React.MouseEvent, hostId: string) => {
+    e.stopPropagation();
+    if (confirmDeleteHostId === hostId) {
+      if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+      setConfirmDeleteHostId(null);
+      onDeleteHost?.(hostId);
+    } else {
+      setConfirmDeleteHostId(hostId);
+      if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+      deleteTimerRef.current = setTimeout(() => {
+        setConfirmDeleteHostId(null);
+      }, 3500);
+    }
+  };
 
   const toggleGroup = (group: string) => {
     setCollapsedGroups((prev) => ({ ...prev, [group]: !prev[group] }));
@@ -414,26 +431,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 <Edit2 size={11} />
                               </button>
                               <button
-                                onClick={() => {
-                                  if (window.confirm(`Remove server profile "${host.name}"?`)) {
-                                    onDeleteHost?.(host.id);
-                                  }
-                                }}
-                                title="Remove Server Config"
+                                onClick={(e) => handleDeleteClick(e, host.id)}
+                                title={confirmDeleteHostId === host.id ? "Click again to confirm delete" : "Remove Server Config"}
                                 style={{
-                                  background: "none",
-                                  border: "none",
-                                  color: "#64748b",
+                                  background: confirmDeleteHostId === host.id ? "rgba(244, 63, 94, 0.25)" : "none",
+                                  border: confirmDeleteHostId === host.id ? "1px solid #f43f5e" : "none",
+                                  color: confirmDeleteHostId === host.id ? "#f43f5e" : "#64748b",
                                   cursor: "pointer",
-                                  padding: "2px",
+                                  padding: confirmDeleteHostId === host.id ? "2px 5px" : "2px",
                                   display: "flex",
                                   alignItems: "center",
+                                  gap: "3px",
                                   borderRadius: "3px",
+                                  fontSize: "10px",
+                                  fontWeight: 600,
                                 }}
                                 onMouseEnter={(e) => (e.currentTarget.style.color = "#f43f5e")}
-                                onMouseLeave={(e) => (e.currentTarget.style.color = "#64748b")}
+                                onMouseLeave={(e) => {
+                                  if (confirmDeleteHostId !== host.id) e.currentTarget.style.color = "#64748b";
+                                }}
                               >
                                 <Trash2 size={11} />
+                                {confirmDeleteHostId === host.id && <span>Delete?</span>}
                               </button>
                               <div
                                 onClick={() => onConnectHost(host)}
@@ -687,27 +706,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </button>
 
                       <button
-                        onClick={() => {
-                          if (window.confirm(`Remove "${h.name}" from profiles?`)) {
-                            onDeleteHost?.(h.id);
-                          }
-                        }}
-                        title="Remove config"
+                        onClick={(e) => handleDeleteClick(e, h.id)}
+                        title={confirmDeleteHostId === h.id ? "Click again to confirm delete" : "Remove config"}
                         style={{
                           display: "flex",
                           alignItems: "center",
                           gap: "4px",
                           padding: "4px 8px",
                           borderRadius: "5px",
-                          backgroundColor: "rgba(244, 63, 94, 0.1)",
-                          border: "1px solid rgba(244, 63, 94, 0.3)",
+                          backgroundColor: confirmDeleteHostId === h.id ? "rgba(244, 63, 94, 0.25)" : "rgba(244, 63, 94, 0.1)",
+                          border: confirmDeleteHostId === h.id ? "1px solid #f43f5e" : "1px solid rgba(244, 63, 94, 0.3)",
                           color: "#f43f5e",
                           fontSize: "11px",
+                          fontWeight: confirmDeleteHostId === h.id ? 700 : 500,
                           cursor: "pointer",
                         }}
                       >
                         <Trash2 size={11} />
-                        <span>Remove</span>
+                        <span>{confirmDeleteHostId === h.id ? "Confirm Delete?" : "Remove"}</span>
                       </button>
                     </div>
                   </div>

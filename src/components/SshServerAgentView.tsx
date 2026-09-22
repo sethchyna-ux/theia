@@ -13,6 +13,7 @@ import {
   Activity,
   Network,
   Info,
+  Zap,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -36,6 +37,7 @@ export const SshServerAgentView: React.FC = () => {
   const [newAuthKey, setNewAuthKey] = useState("");
   const [showAddKeyInput, setShowAddKeyInput] = useState(false);
   const [copiedCommand, setCopiedCommand] = useState(false);
+  const [serverMsg, setServerMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Agent state
   const [agentStatus, setAgentStatus] = useState<SshAgentStatus | null>(null);
@@ -106,14 +108,50 @@ export const SshServerAgentView: React.FC = () => {
     }
   };
 
+  const [isAutoConfiguringServer, setIsAutoConfiguringServer] = useState(false);
+  const [isAutoConfiguringAgent, setIsAutoConfiguringAgent] = useState(false);
+  const [confirmPurgeKeys, setConfirmPurgeKeys] = useState(false);
+
+  const handleAutoConfigureServer = async () => {
+    setIsAutoConfiguringServer(true);
+    try {
+      const res = await invoke<string>("auto_configure_ssh_server");
+      setServerMsg({ type: "success", text: res });
+      setTimeout(() => setServerMsg(null), 4000);
+      loadServerStatus();
+    } catch (err: any) {
+      setServerMsg({ type: "error", text: err?.message || String(err) });
+      setTimeout(() => setServerMsg(null), 5000);
+    } finally {
+      setIsAutoConfiguringServer(false);
+    }
+  };
+
+  const handleAutoConfigureAgent = async () => {
+    setIsAutoConfiguringAgent(true);
+    try {
+      const res = await invoke<string>("auto_configure_ssh_agent");
+      setAgentMsg({ type: "success", text: res });
+      setTimeout(() => setAgentMsg(null), 4000);
+      loadAgentStatus();
+    } catch (err: any) {
+      setAgentMsg({ type: "error", text: err?.message || String(err) });
+      setTimeout(() => setAgentMsg(null), 5000);
+    } finally {
+      setIsAutoConfiguringAgent(false);
+    }
+  };
+
   const handleRemoveAuthorizedKey = async (key: string) => {
-    if (!confirm("Remove this client public key?")) return;
     try {
       const updated = await invoke<string[]>("remove_server_authorized_key", { key });
       setAuthorizedKeys(updated);
+      setServerMsg({ type: "success", text: "Client public key removed" });
+      setTimeout(() => setServerMsg(null), 3000);
       loadServerStatus();
     } catch (err: any) {
-      alert(`Failed to remove key: ${err?.message || err}`);
+      setServerMsg({ type: "error", text: `Failed to remove key: ${err?.message || err}` });
+      setTimeout(() => setServerMsg(null), 4000);
     }
   };
 
@@ -152,19 +190,30 @@ export const SshServerAgentView: React.FC = () => {
   const handleRemoveKeyFromAgent = async (keyPath: string) => {
     try {
       await invoke("remove_key_from_agent", { keyPath });
+      setAgentMsg({ type: "success", text: `Removed ${keyPath} from agent` });
+      setTimeout(() => setAgentMsg(null), 3000);
       loadAgentStatus();
     } catch (err: any) {
-      alert(`Failed to remove key: ${err?.message || err}`);
+      setAgentMsg({ type: "error", text: `Failed to remove key: ${err?.message || err}` });
+      setTimeout(() => setAgentMsg(null), 4000);
     }
   };
 
   const handleClearAllAgentKeys = async () => {
-    if (!confirm("Purge all loaded keys from ssh-agent?")) return;
+    if (!confirmPurgeKeys) {
+      setConfirmPurgeKeys(true);
+      setTimeout(() => setConfirmPurgeKeys(false), 3500);
+      return;
+    }
+    setConfirmPurgeKeys(false);
     try {
       await invoke("clear_all_agent_keys");
+      setAgentMsg({ type: "success", text: "Purged all keys from ssh-agent" });
+      setTimeout(() => setAgentMsg(null), 3000);
       loadAgentStatus();
     } catch (err: any) {
-      alert(`Failed to clear agent keys: ${err?.message || err}`);
+      setAgentMsg({ type: "error", text: `Failed to clear agent keys: ${err?.message || err}` });
+      setTimeout(() => setAgentMsg(null), 4000);
     }
   };
 
@@ -438,6 +487,31 @@ export const SshServerAgentView: React.FC = () => {
                   </button>
                 )}
 
+                {!serverStatus?.running && (
+                  <button
+                    onClick={handleAutoConfigureServer}
+                    disabled={serverLoading || isAutoConfiguringServer}
+                    title="Auto-probe open port (2222+), generate ED25519 host key, import client pubkeys, and start"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "8px 16px",
+                      borderRadius: "8px",
+                      background: "rgba(168, 85, 247, 0.15)",
+                      border: "1px solid rgba(168, 85, 247, 0.4)",
+                      color: "#c084fc",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      boxShadow: "0 0 12px rgba(168, 85, 247, 0.2)",
+                    }}
+                  >
+                    <Zap size={14} />
+                    <span>{isAutoConfiguringServer ? "Configuring..." : "⚡ 1-Click Auto-Configure"}</span>
+                  </button>
+                )}
+
                 <button
                   onClick={loadServerStatus}
                   title="Refresh Status"
@@ -454,6 +528,29 @@ export const SshServerAgentView: React.FC = () => {
                 </button>
               </div>
             </div>
+
+            {/* Server Message Banner */}
+            {serverMsg && (
+              <div
+                style={{
+                  padding: "10px 16px",
+                  borderRadius: "8px",
+                  backgroundColor:
+                    serverMsg.type === "success"
+                      ? "rgba(16, 185, 129, 0.12)"
+                      : "rgba(244, 63, 94, 0.12)",
+                  border:
+                    serverMsg.type === "success"
+                      ? "1px solid rgba(16, 185, 129, 0.3)"
+                      : "1px solid rgba(244, 63, 94, 0.3)",
+                  color: serverMsg.type === "success" ? "#34d399" : "#fda4af",
+                  fontSize: "12px",
+                  fontWeight: 500,
+                }}
+              >
+                {serverMsg.text}
+              </div>
+            )}
 
             {/* Quick Connect Command Card (When Running) */}
             {serverStatus?.running && (
@@ -987,6 +1084,29 @@ export const SshServerAgentView: React.FC = () => {
                 >
                   <RefreshCw size={13} className={agentLoading ? "animate-spin" : ""} />
                   <span>Refresh</span>
+                </button>
+
+                <button
+                  onClick={handleAutoConfigureAgent}
+                  disabled={agentLoading || isAutoConfiguringAgent}
+                  title="Detect/launch ssh-agent, export $SSH_AUTH_SOCK, scan ~/.ssh and vault, and load all keys"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "7px 14px",
+                    borderRadius: "6px",
+                    backgroundColor: "rgba(168, 85, 247, 0.15)",
+                    border: "1px solid rgba(168, 85, 247, 0.4)",
+                    color: "#c084fc",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    boxShadow: "0 0 10px rgba(168, 85, 247, 0.2)",
+                  }}
+                >
+                  <Zap size={13} />
+                  <span>{isAutoConfiguringAgent ? "Configuring..." : "⚡ 1-Click Auto-Configure"}</span>
                 </button>
 
                 {agentIdentities.length > 0 && (

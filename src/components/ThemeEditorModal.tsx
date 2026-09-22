@@ -68,9 +68,16 @@ export const ThemeEditorModal: React.FC<ThemeEditorModalProps> = ({
     setTimeout(() => setSaveSuccess(false), 2000);
   };
 
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   const handleDelete = () => {
     if (!theme.isCustom) return;
-    if (!confirm(`Delete custom theme '${theme.name}'?`)) return;
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      setTimeout(() => setConfirmDelete(false), 3500);
+      return;
+    }
+    setConfirmDelete(false);
     deleteCustomTheme(theme.id);
     onApplyTheme("obsidian");
     setTheme({ ...BUILTIN_THEMES.obsidian });
@@ -502,14 +509,15 @@ export const ThemeEditorModal: React.FC<ThemeEditorModalProps> = ({
                     gap: "5px",
                     padding: "6px 12px",
                     borderRadius: "6px",
-                    background: "rgba(244, 63, 94, 0.1)",
-                    border: "1px solid rgba(244, 63, 94, 0.25)",
+                    background: confirmDelete ? "rgba(244, 63, 94, 0.3)" : "rgba(244, 63, 94, 0.1)",
+                    border: confirmDelete ? "1px solid #f43f5e" : "1px solid rgba(244, 63, 94, 0.25)",
                     color: "#fda4af",
                     fontSize: "11px",
+                    fontWeight: confirmDelete ? 700 : 500,
                     cursor: "pointer",
                   }}
                 >
-                  <Trash2 size={13} /> Delete Theme
+                  <Trash2 size={13} /> {confirmDelete ? "Confirm Delete?" : "Delete Theme"}
                 </button>
               )}
             </div>

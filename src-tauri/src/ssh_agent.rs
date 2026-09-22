@@ -240,3 +240,47 @@ pub fn clear_all_agent_keys() -> Result<String, String> {
         Err(if !err.is_empty() { err } else { "Failed to clear identities".to_string() })
     }
 }
+
+pub fn auto_configure_agent() -> Result<SshAgentStatus, String> {
+    // 1. Verify if SSH_AUTH_SOCK is active; if not, spawn ssh-agent
+    let current_status = get_agent_status();
+    if !current_status.active || current_status.socket_path.is_none() {
+        if let Ok(out) = Command::new("ssh-agent").arg("-s").output() {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            for line in stdout.lines() {
+                if line.starts_with("SSH_AUTH_SOCK=") {
+                    if let Some(val) = line.split(';').next() {
+                        let path = val.trim_start_matches("SSH_AUTH_SOCK=").trim();
+                        env::set_var("SSH_AUTH_SOCK", path);
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Discover private keys in ~/.ssh/ and ~/.theia/vault/
+    if let Some(home) = dirs::home_dir() {
+        let ssh_dir = home.join(".ssh");
+        let candidate_names = ["id_ed25519", "id_rsa", "id_ecdsa", "id_dsa"];
+        for name in &candidate_names {
+            let key_path = ssh_dir.join(name);
+            if key_path.exists() {
+                let _ = Command::new("ssh-add").arg(&key_path).output();
+            }
+        }
+
+        let vault_dir = home.join(".theia").join("vault");
+        if vault_dir.exists() {
+            if let Ok(entries) = std::fs::read_dir(&vault_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_file() && !path.extension().map_or(false, |ext| ext == "pub") {
+                        let _ = Command::new("ssh-add").arg(&path).output();
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(get_agent_status())
+}

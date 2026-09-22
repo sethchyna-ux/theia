@@ -163,6 +163,63 @@ impl SshServerManager {
         Ok(self.get_status())
     }
 
+    pub fn auto_configure(&self) -> Result<SshServerStatus, String> {
+        // 1. Auto-probe available port starting at 2222
+        let mut port = 2222;
+        while port < 2300 {
+            if std::net::TcpListener::bind(("127.0.0.1", port)).is_ok() {
+                break;
+            }
+            port += 1;
+        }
+
+        // 2. Ensure keys and auto-import all public keys from ~/.ssh/
+        let dir = Self::get_server_dir();
+        let _ = fs::create_dir_all(&dir);
+
+        let auth_keys = dir.join("authorized_keys");
+        let mut existing_keys = if auth_keys.exists() {
+            fs::read_to_string(&auth_keys).unwrap_or_default()
+        } else {
+            String::new()
+        };
+
+        if let Some(home) = dirs::home_dir() {
+            let ssh_dir = home.join(".ssh");
+            let key_files = [
+                "id_ed25519.pub",
+                "id_rsa.pub",
+                "id_ecdsa.pub",
+                "authorized_keys",
+            ];
+            for file_name in &key_files {
+                let p = ssh_dir.join(file_name);
+                if p.exists() {
+                    if let Ok(content) = fs::read_to_string(&p) {
+                        for line in content.lines() {
+                            let trimmed = line.trim();
+                            if !trimmed.is_empty() && !trimmed.starts_with('#') && !existing_keys.contains(trimmed) {
+                                existing_keys.push_str(trimmed);
+                                existing_keys.push('\n');
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let _ = fs::write(&auth_keys, existing_keys);
+
+        // 3. Stop if running, then start with optimal auto-config
+        let _ = self.stop();
+        let config = SshServerConfig {
+            port,
+            listen_address: "0.0.0.0".to_string(),
+            allow_password: true,
+            allow_pubkey: true,
+        };
+        self.start(config)
+    }
+
     pub fn stop(&self) -> Result<SshServerStatus, String> {
         let mut child_guard = self.child.lock().unwrap();
 

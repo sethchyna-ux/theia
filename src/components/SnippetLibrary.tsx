@@ -221,8 +221,26 @@ export const SnippetLibrary: React.FC<SnippetLibraryProps> = ({
     }
   };
 
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const handleQuickRun = (snip: Snippet, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (snip.script.includes("{{")) {
+      setSelectedSnippetId(snip.id);
+      setIsCreating(false);
+      setIsEditing(false);
+    } else {
+      onExecuteSnippet(snip.script, false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this snippet permanently?")) return;
+    if (confirmDeleteId !== id) {
+      setConfirmDeleteId(id);
+      setTimeout(() => setConfirmDeleteId(null), 3500);
+      return;
+    }
+    setConfirmDeleteId(null);
     try {
       await invoke("delete_snippet", { id });
       const nextSnippets = snippets.filter((s) => s.id !== id);
@@ -454,21 +472,43 @@ export const SnippetLibrary: React.FC<SnippetLibraryProps> = ({
                     >
                       {snip.name}
                     </span>
-                    {hasVars && (
-                      <span
-                        title="Contains dynamic variables {{...}}"
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      {hasVars && (
+                        <span
+                          title="Contains dynamic variables {{...}}"
+                          style={{
+                            fontSize: "10px",
+                            padding: "1px 5px",
+                            borderRadius: "4px",
+                            background: "rgba(6, 182, 212, 0.15)",
+                            color: "#22d3ee",
+                            fontFamily: "var(--font-mono)",
+                          }}
+                        >
+                          {"{{var}}"}
+                        </span>
+                      )}
+                      <button
+                        onClick={(e) => handleQuickRun(snip, e)}
+                        title={hasVars ? "Fill variables & run" : "Quick execute on active terminal"}
                         style={{
-                          fontSize: "10px",
-                          padding: "1px 5px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "3px",
+                          padding: "2px 7px",
                           borderRadius: "4px",
-                          background: "rgba(6, 182, 212, 0.15)",
-                          color: "#22d3ee",
-                          fontFamily: "var(--font-mono)",
+                          backgroundColor: "rgba(147, 51, 234, 0.2)",
+                          border: "1px solid rgba(168, 85, 247, 0.4)",
+                          color: "#d8b4fe",
+                          fontSize: "10px",
+                          fontWeight: 700,
+                          cursor: "pointer",
                         }}
                       >
-                        {"{{var}}"}
-                      </span>
-                    )}
+                        <Play size={9} fill="#d8b4fe" />
+                        <span>Run</span>
+                      </button>
+                    </div>
                   </div>
 
                   {snip.description && (
@@ -796,22 +836,46 @@ export const SnippetLibrary: React.FC<SnippetLibraryProps> = ({
                 </button>
 
                 <button
+                  onClick={handleRun}
+                  title="Execute snippet directly on active terminal"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "7px 16px",
+                    borderRadius: "6px",
+                    background: "linear-gradient(135deg, #9333ea, #6366f1)",
+                    border: "none",
+                    color: "#ffffff",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    boxShadow: "0 0 12px rgba(147, 51, 234, 0.35)",
+                  }}
+                >
+                  <Play size={12} fill="#ffffff" />
+                  <span>Execute</span>
+                </button>
+
+                <button
                   onClick={() => handleDelete(selectedSnippet.id)}
+                  title={confirmDeleteId === selectedSnippet.id ? "Click again to confirm delete" : "Delete snippet"}
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: "6px",
                     padding: "7px 12px",
                     borderRadius: "6px",
-                    background: "rgba(244, 63, 94, 0.1)",
-                    border: "1px solid rgba(244, 63, 94, 0.25)",
+                    background: confirmDeleteId === selectedSnippet.id ? "rgba(244, 63, 94, 0.3)" : "rgba(244, 63, 94, 0.1)",
+                    border: confirmDeleteId === selectedSnippet.id ? "1px solid #f43f5e" : "1px solid rgba(244, 63, 94, 0.25)",
                     color: "#fda4af",
                     fontSize: "12px",
+                    fontWeight: confirmDeleteId === selectedSnippet.id ? 700 : 500,
                     cursor: "pointer",
                   }}
                 >
                   <Trash2 size={14} />
-                  <span>Delete</span>
+                  <span>{confirmDeleteId === selectedSnippet.id ? "Confirm Delete?" : "Delete"}</span>
                 </button>
               </div>
             </div>

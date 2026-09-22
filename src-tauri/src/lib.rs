@@ -536,6 +536,11 @@ fn clear_all_agent_keys() -> Result<String, String> {
     ssh_agent::clear_all_agent_keys()
 }
 
+#[tauri::command]
+fn auto_configure_ssh_agent() -> Result<ssh_agent::SshAgentStatus, String> {
+    ssh_agent::auto_configure_agent()
+}
+
 // ---------------------- SSH Server Hosting Commands ----------------------
 #[tauri::command]
 fn get_ssh_server_status(state: State<'_, AppState>) -> ssh_server::SshServerStatus {
@@ -548,6 +553,13 @@ fn start_ssh_server(
     config: ssh_server::SshServerConfig,
 ) -> Result<ssh_server::SshServerStatus, String> {
     state.ssh_server_mgr.start(config)
+}
+
+#[tauri::command]
+fn auto_configure_ssh_server(
+    state: State<'_, AppState>,
+) -> Result<ssh_server::SshServerStatus, String> {
+    state.ssh_server_mgr.auto_configure()
 }
 
 #[tauri::command]
@@ -640,8 +652,10 @@ pub fn run() {
             add_key_to_agent,
             remove_key_from_agent,
             clear_all_agent_keys,
+            auto_configure_ssh_agent,
             get_ssh_server_status,
             start_ssh_server,
+            auto_configure_ssh_server,
             stop_ssh_server,
             get_server_authorized_keys,
             add_server_authorized_key,

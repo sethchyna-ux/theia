@@ -158,14 +158,21 @@ export const SftpExplorer: React.FC<SftpExplorerProps> = ({ tabs, activeTabId })
     }
   };
 
+  const [confirmDeletePath, setConfirmDeletePath] = useState<string | null>(null);
+
   const handleDeleteEntry = async (entry: RemoteFileEntry, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm(`Are you sure you want to delete '${entry.name}'?`)) return;
+    if (confirmDeletePath !== entry.path) {
+      setConfirmDeletePath(entry.path);
+      setTimeout(() => setConfirmDeletePath(null), 3500);
+      return;
+    }
+    setConfirmDeletePath(null);
     try {
       await invoke("sftp_delete", { sessionId: targetSessionId, path: entry.path });
       loadDirectory(currentPath);
     } catch (err: any) {
-      alert(`Failed to delete '${entry.name}': ${err?.message || err}`);
+      setErrorMsg(`Failed to delete '${entry.name}': ${err?.message || err}`);
     }
   };
 
@@ -530,18 +537,27 @@ export const SftpExplorer: React.FC<SftpExplorerProps> = ({ tabs, activeTabId })
                   <td style={{ padding: "10px 8px", textAlign: "right" }}>
                     <button
                       onClick={(e) => handleDeleteEntry(entry, e)}
-                      title="Delete"
+                      title={confirmDeletePath === entry.path ? "Click again to confirm delete" : "Delete"}
                       style={{
-                        background: "transparent",
-                        border: "none",
-                        color: "#64748b",
+                        background: confirmDeletePath === entry.path ? "rgba(244, 63, 94, 0.25)" : "transparent",
+                        border: confirmDeletePath === entry.path ? "1px solid #f43f5e" : "none",
+                        color: confirmDeletePath === entry.path ? "#f43f5e" : "#64748b",
                         cursor: "pointer",
-                        padding: "4px",
+                        padding: confirmDeletePath === entry.path ? "3px 6px" : "4px",
+                        borderRadius: "4px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "3px",
+                        fontSize: "11px",
+                        fontWeight: 600,
                       }}
                       onMouseEnter={(e) => (e.currentTarget.style.color = "#f43f5e")}
-                      onMouseLeave={(e) => (e.currentTarget.style.color = "#64748b")}
+                      onMouseLeave={(e) => {
+                        if (confirmDeletePath !== entry.path) e.currentTarget.style.color = "#64748b";
+                      }}
                     >
                       <Trash2 size={13} />
+                      {confirmDeletePath === entry.path && <span>Delete?</span>}
                     </button>
                   </td>
                 </tr>

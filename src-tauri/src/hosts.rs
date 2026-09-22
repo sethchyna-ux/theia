@@ -75,6 +75,10 @@ pub fn remove_or_hide_host(id: &str) -> Result<(), String> {
     if !hidden.contains(&id.to_string()) {
         hidden.push(id.to_string());
     }
+    let name_part = id.strip_prefix("ssh_cfg_").unwrap_or(id);
+    if !hidden.contains(&name_part.to_string()) {
+        hidden.push(name_part.to_string());
+    }
     save_hidden_hosts(&hidden)
 }
 

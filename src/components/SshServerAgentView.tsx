@@ -115,9 +115,15 @@ export const SshServerAgentView: React.FC = () => {
   const handleAutoConfigureServer = async () => {
     setIsAutoConfiguringServer(true);
     try {
-      const res = await invoke<string>("auto_configure_ssh_server");
-      setServerMsg({ type: "success", text: res });
-      setTimeout(() => setServerMsg(null), 4000);
+      const res = await invoke<any>("auto_configure_ssh_server");
+      const msgText =
+        typeof res === "string"
+          ? res
+          : res?.port
+          ? `SSH Server active on port ${res.port}`
+          : "SSH Server configured successfully";
+      setServerMsg({ type: "success", text: msgText });
+      setTimeout(() => setServerMsg(null), 5000);
       loadServerStatus();
     } catch (err: any) {
       setServerMsg({ type: "error", text: err?.message || String(err) });

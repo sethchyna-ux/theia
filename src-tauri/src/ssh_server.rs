@@ -63,6 +63,7 @@ impl SshServerManager {
                 .arg("")
                 .arg("-f")
                 .arg(&host_key)
+                .stdin(std::process::Stdio::null())
                 .status()
                 .map_err(|e| format!("Failed to generate host key: {}", e))?;
 
@@ -150,6 +151,7 @@ impl SshServerManager {
             .arg(&config_file)
             .arg("-h")
             .arg(&host_key)
+            .stdin(std::process::Stdio::null())
             .stdout(log_out)
             .stderr(log_err)
             .spawn()
@@ -163,8 +165,11 @@ impl SshServerManager {
         Ok(self.get_status())
     }
 
-    pub fn auto_configure(&self) -> Result<SshServerStatus, String> {
-        // 1. Auto-probe available port starting at 2222
+    pub fn auto_configure(&self) -> Result<String, String> {
+        // 1. Stop if running first so port 2222 is cleanly released
+        let _ = self.stop();
+
+        // 2. Auto-probe available port starting at 2222
         let mut port = 2222;
         while port < 2300 {
             if std::net::TcpListener::bind(("127.0.0.1", port)).is_ok() {
@@ -173,7 +178,7 @@ impl SshServerManager {
             port += 1;
         }
 
-        // 2. Ensure keys and auto-import all public keys from ~/.ssh/
+        // 3. Ensure keys and auto-import all public keys from ~/.ssh/
         let dir = Self::get_server_dir();
         let _ = fs::create_dir_all(&dir);
 
@@ -209,15 +214,23 @@ impl SshServerManager {
         }
         let _ = fs::write(&auth_keys, existing_keys);
 
-        // 3. Stop if running, then start with optimal auto-config
-        let _ = self.stop();
+        // 4. Start with optimal auto-config
         let config = SshServerConfig {
             port,
             listen_address: "0.0.0.0".to_string(),
             allow_password: true,
             allow_pubkey: true,
         };
-        self.start(config)
+        let status = self.start(config)?;
+
+        let pid_display = status.pid.map(|p| format!(" (PID {})", p)).unwrap_or_default();
+        Ok(format!(
+            "SSH Server running on port {}{} with {} authorized key{}",
+            port,
+            pid_display,
+            status.authorized_keys_count,
+            if status.authorized_keys_count == 1 { "" } else { "s" }
+        ))
     }
 
     pub fn stop(&self) -> Result<SshServerStatus, String> {
@@ -225,15 +238,37 @@ impl SshServerManager {
 
         if let Some(mut c) = child_guard.take() {
             let _ = c.kill();
-            let _ = c.wait();
+            for _ in 0..10 {
+                match c.try_wait() {
+                    Ok(Some(_)) => break,
+                    Ok(None) => std::thread::sleep(std::time::Duration::from_millis(30)),
+                    Err(_) => break,
+                }
+            }
         }
 
-        // Also check and clean up PID file if any
+        // Also check and clean up PID file if any without hanging on pipes or blocking wait
         let pid_file = Self::get_server_dir().join("sshd.pid");
         if pid_file.exists() {
             if let Ok(pid_str) = fs::read_to_string(&pid_file) {
                 if let Ok(pid) = pid_str.trim().parse::<i32>() {
-                    let _ = Command::new("kill").arg(pid.to_string()).output();
+                    unsafe {
+                        extern "C" {
+                            fn kill(pid: i32, sig: i32) -> i32;
+                        }
+                        // Send SIGTERM
+                        let _ = kill(pid, 15);
+                        for _ in 0..10 {
+                            if kill(pid, 0) != 0 {
+                                break;
+                            }
+                            std::thread::sleep(std::time::Duration::from_millis(30));
+                        }
+                        // Force SIGKILL if still alive
+                        if kill(pid, 0) == 0 {
+                            let _ = kill(pid, 9);
+                        }
+                    }
                 }
             }
             let _ = fs::remove_file(&pid_file);
@@ -260,11 +295,50 @@ impl SshServerManager {
             }
         }
 
-        let port = *self.current_port.lock().unwrap();
-        let listen_address = self.current_addr.lock().unwrap().clone();
+        if !running {
+            let pid_file = Self::get_server_dir().join("sshd.pid");
+            if pid_file.exists() {
+                if let Ok(pid_str) = fs::read_to_string(&pid_file) {
+                    if let Ok(p) = pid_str.trim().parse::<i32>() {
+                        let is_alive = unsafe {
+                            extern "C" {
+                                fn kill(pid: i32, sig: i32) -> i32;
+                            }
+                            kill(p, 0) == 0
+                        };
+                        if is_alive {
+                            running = true;
+                            pid = Some(p as u32);
+                        } else {
+                            let _ = fs::remove_file(&pid_file);
+                        }
+                    }
+                }
+            }
+        }
+
+        let dir = Self::get_server_dir();
+        let mut port = *self.current_port.lock().unwrap();
+        let mut listen_address = self.current_addr.lock().unwrap().clone();
+
+        if running {
+            let cfg_path = dir.join("sshd_config");
+            if cfg_path.exists() {
+                if let Ok(cfg) = fs::read_to_string(&cfg_path) {
+                    for line in cfg.lines() {
+                        if line.starts_with("Port ") {
+                            if let Ok(p) = line.trim_start_matches("Port ").trim().parse::<u16>() {
+                                port = p;
+                            }
+                        } else if line.starts_with("ListenAddress ") {
+                            listen_address = line.trim_start_matches("ListenAddress ").trim().to_string();
+                        }
+                    }
+                }
+            }
+        }
 
         // Fingerprint
-        let dir = Self::get_server_dir();
         let host_pub = dir.join("ssh_host_ed25519_key.pub");
         let host_key_fingerprint = if host_pub.exists() {
             let out = Command::new("ssh-keygen")
@@ -273,6 +347,7 @@ impl SshServerManager {
                 .arg("sha256")
                 .arg("-f")
                 .arg(&host_pub)
+                .stdin(std::process::Stdio::null())
                 .output()
                 .ok();
             out.and_then(|o| {

@@ -575,7 +575,7 @@ fn start_ssh_server(
 #[tauri::command]
 fn auto_configure_ssh_server(
     state: State<'_, AppState>,
-) -> Result<ssh_server::SshServerStatus, String> {
+) -> Result<String, String> {
     state.ssh_server_mgr.auto_configure()
 }
 

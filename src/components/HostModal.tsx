@@ -131,13 +131,13 @@ export const HostModal: React.FC<HostModalProps> = ({
       <div
         style={{
           backgroundColor: "#0d1424",
-          border: "1px solid rgba(255, 255, 255, 0.12)",
-          borderRadius: "12px",
-          width: "560px",
+          border: "1px solid rgba(6, 182, 212, 0.25)",
+          borderRadius: "14px",
+          width: "min(680px, 92vw)",
           maxHeight: "90vh",
           overflowY: "auto",
-          padding: "24px",
-          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.7)",
+          padding: "26px",
+          boxShadow: "0 30px 60px -12px rgba(0, 0, 0, 0.8), 0 0 30px rgba(6, 182, 212, 0.1)",
         }}
       >
         <div

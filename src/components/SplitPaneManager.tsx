@@ -11,6 +11,7 @@ interface SplitPaneManagerProps {
   splitLayout: SplitLayout;
   broadcastMode: boolean;
   onBroadcastInput: (data: string) => void;
+  themeId?: string;
 }
 
 export const SplitPaneManager: React.FC<SplitPaneManagerProps> = ({
@@ -21,6 +22,7 @@ export const SplitPaneManager: React.FC<SplitPaneManagerProps> = ({
   splitLayout,
   broadcastMode,
   onBroadcastInput,
+  themeId,
 }) => {
   if (tabs.length === 0) {
     return (
@@ -214,6 +216,7 @@ export const SplitPaneManager: React.FC<SplitPaneManagerProps> = ({
                   sessionId={tab.id}
                   host={tab.host}
                   isActive={isActive}
+                  themeId={themeId}
                   onFocus={() => onSelectTab(tab.id)}
                   broadcastMode={broadcastMode}
                   onBroadcastInput={onBroadcastInput}

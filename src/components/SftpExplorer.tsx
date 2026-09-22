@@ -26,6 +26,8 @@ export const SftpExplorer: React.FC<SftpExplorerProps> = ({ tabs, activeTabId })
   const [currentPath, setCurrentPath] = useState("/");
   const [entries, setEntries] = useState<RemoteFileEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Editor modal state
   const [editingFile, setEditingFile] = useState<{ path: string; content: string } | null>(null);
@@ -37,6 +39,29 @@ export const SftpExplorer: React.FC<SftpExplorerProps> = ({ tabs, activeTabId })
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
+
+  const handleProcessUploadFiles = async (fileList: FileList | File[] | null) => {
+    if (!activeTab || !fileList || fileList.length === 0) return;
+    setLoading(true);
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      const targetPath = currentPath.endsWith("/")
+        ? `${currentPath}${file.name}`
+        : `${currentPath}/${file.name}`;
+      try {
+        const text = await file.text();
+        await invoke("sftp_write", {
+          sessionId: activeTab.id,
+          path: targetPath,
+          content: text,
+        });
+      } catch (err) {
+        console.error("Failed to upload file:", err);
+      }
+    }
+    await loadDirectory(currentPath);
+    setLoading(false);
+  };
 
   const loadDirectory = async (path: string) => {
     if (!activeTab) return;
@@ -236,8 +261,16 @@ export const SftpExplorer: React.FC<SftpExplorerProps> = ({ tabs, activeTabId })
             <span>New Folder</span>
           </button>
 
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            style={{ display: "none" }}
+            onChange={(e) => handleProcessUploadFiles(e.target.files)}
+          />
+
           <button
-            onClick={() => alert("Upload dialog: Drag & drop files directly or select file.")}
+            onClick={() => fileInputRef.current?.click()}
             style={{
               display: "flex",
               alignItems: "center",
@@ -258,8 +291,50 @@ export const SftpExplorer: React.FC<SftpExplorerProps> = ({ tabs, activeTabId })
         </div>
       </div>
 
-      {/* File Table */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "12px 18px" }}>
+      {/* File Table Container with Drag & Drop Zone */}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDraggingOver(true);
+        }}
+        onDragLeave={() => setIsDraggingOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDraggingOver(false);
+          handleProcessUploadFiles(e.dataTransfer.files);
+        }}
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "12px 18px",
+          position: "relative",
+          border: isDraggingOver ? "2px dashed #06b6d4" : "2px dashed transparent",
+          backgroundColor: isDraggingOver ? "rgba(6, 182, 212, 0.05)" : "transparent",
+          transition: "all 0.15s ease",
+        }}
+      >
+        {isDraggingOver && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "rgba(8, 12, 20, 0.9)",
+              backdropFilter: "blur(6px)",
+              zIndex: 30,
+              gap: "10px",
+            }}
+          >
+            <Upload size={36} color="#22d3ee" />
+            <span style={{ fontSize: "14px", fontWeight: "600", color: "#f8fafc" }}>
+              Drop files from macOS Finder to upload to {currentPath}
+            </span>
+          </div>
+        )}
+
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
           <thead>
             <tr style={{ color: "#64748b", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", textAlign: "left" }}>

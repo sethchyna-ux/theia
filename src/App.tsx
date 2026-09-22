@@ -31,6 +31,9 @@ export const App: React.FC = () => {
   // Command palette state (Spotlight / Raycast style ⌘K)
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
+  // Terminal Theme state (Obsidian, Catppuccin, Tokyo Night, Dracula, Nord, Matrix)
+  const [terminalTheme, setTerminalTheme] = useState<string>("obsidian");
+
   // Load all hosts on startup
   const refreshHosts = async () => {
     try {
@@ -259,6 +262,8 @@ export const App: React.FC = () => {
           setIsHostModalOpen(true);
         }}
         onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+        themeId={terminalTheme}
+        onChangeTheme={setTerminalTheme}
         broadcastMode={broadcastMode}
         onToggleBroadcast={() => setBroadcastMode(!broadcastMode)}
         hudVisible={hudVisible}
@@ -310,6 +315,7 @@ export const App: React.FC = () => {
                   splitLayout={splitLayout}
                   broadcastMode={broadcastMode}
                   onBroadcastInput={handleBroadcastInput}
+                  themeId={terminalTheme}
                 />
               </div>
             </>
@@ -357,6 +363,7 @@ export const App: React.FC = () => {
         hudVisible={hudVisible}
         onChangeSplitLayout={setSplitLayout}
         onExecuteSnippet={handleExecuteSnippet}
+        onChangeTheme={setTerminalTheme}
       />
     </div>
   );

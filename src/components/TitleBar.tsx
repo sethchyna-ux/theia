@@ -11,8 +11,10 @@ import {
   Terminal as TermIcon,
   Server,
   Command,
+  Palette,
 } from "lucide-react";
 import { SessionTab, SplitLayout } from "../types";
+import { TERMINAL_THEMES } from "../themes";
 
 interface TitleBarProps {
   tabs: SessionTab[];
@@ -28,6 +30,8 @@ interface TitleBarProps {
   splitLayout: SplitLayout;
   onChangeSplitLayout: (layout: SplitLayout) => void;
   onOpenCommandPalette?: () => void;
+  themeId?: string;
+  onChangeTheme?: (themeId: string) => void;
 }
 
 export const TitleBar: React.FC<TitleBarProps> = ({
@@ -44,7 +48,10 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   splitLayout,
   onChangeSplitLayout,
   onOpenCommandPalette,
+  themeId = "obsidian",
+  onChangeTheme,
 }) => {
+  const [showThemeMenu, setShowThemeMenu] = React.useState(false);
   return (
     <header
       data-tauri-drag-region
@@ -215,6 +222,84 @@ export const TitleBar: React.FC<TitleBarProps> = ({
             <span>⌘K</span>
           </button>
         )}
+
+        {/* Theme Picker Dropdown */}
+        <div style={{ position: "relative" }}>
+          <button
+            onClick={() => setShowThemeMenu((prev) => !prev)}
+            title="Terminal Theme"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+              padding: "4px 8px",
+              borderRadius: "6px",
+              fontSize: "11px",
+              fontWeight: 500,
+              cursor: "pointer",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              background: showThemeMenu ? "rgba(6, 182, 212, 0.15)" : "rgba(255, 255, 255, 0.04)",
+              color: showThemeMenu ? "#22d3ee" : "#cbd5e1",
+            }}
+          >
+            <Palette size={12} />
+            <span>{TERMINAL_THEMES[themeId]?.name || "Theme"}</span>
+          </button>
+
+          {showThemeMenu && (
+            <div
+              style={{
+                position: "absolute",
+                top: "34px",
+                right: 0,
+                width: "180px",
+                backgroundColor: "#0d1424",
+                border: "1px solid rgba(255, 255, 255, 0.15)",
+                borderRadius: "8px",
+                padding: "6px",
+                boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.7)",
+                zIndex: 100,
+                display: "flex",
+                flexDirection: "column",
+                gap: "2px",
+              }}
+            >
+              {Object.values(TERMINAL_THEMES).map((th) => (
+                <button
+                  key={th.id}
+                  onClick={() => {
+                    onChangeTheme?.(th.id);
+                    setShowThemeMenu(false);
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "6px 8px",
+                    borderRadius: "5px",
+                    border: "none",
+                    background: themeId === th.id ? "rgba(6, 182, 212, 0.2)" : "transparent",
+                    color: themeId === th.id ? "#22d3ee" : "#cbd5e1",
+                    fontSize: "12px",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: "10px",
+                      height: "10px",
+                      borderRadius: "50%",
+                      backgroundColor: th.cursor,
+                      display: "inline-block",
+                    }}
+                  />
+                  <span>{th.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Broadcast Mode Toggle */}
         <button

@@ -14,14 +14,16 @@ import {
   Grid2X2,
   Square,
   ArrowRight,
+  Palette,
 } from "lucide-react";
 import { HostConfig, SplitLayout, ActiveView } from "../types";
+import { TERMINAL_THEMES } from "../themes";
 
 interface CommandItem {
   id: string;
   title: string;
   subtitle: string;
-  category: "Actions" | "Hosts" | "Snippets" | "Views";
+  category: "Actions" | "Hosts" | "Snippets" | "Views" | "Themes";
   icon: React.ReactNode;
   action: () => void;
 }
@@ -39,6 +41,7 @@ interface CommandPaletteProps {
   hudVisible: boolean;
   onChangeSplitLayout: (layout: SplitLayout) => void;
   onExecuteSnippet: (command: string, broadcast: boolean) => void;
+  onChangeTheme?: (themeId: string) => void;
 }
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
@@ -53,6 +56,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onToggleHud,
   hudVisible,
   onChangeSplitLayout,
+  onChangeTheme,
 }) => {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -202,6 +206,18 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       icon: <Server size={16} color="#06b6d4" />,
       action: () => {
         onConnectHost(h);
+        onClose();
+      },
+    })),
+    // Themes
+    ...Object.values(TERMINAL_THEMES).map((th) => ({
+      id: `theme_${th.id}`,
+      title: `Theme: ${th.name}`,
+      subtitle: `Switch terminal appearance to ${th.name}`,
+      category: "Themes" as const,
+      icon: <Palette size={16} color={th.cursor} />,
+      action: () => {
+        onChangeTheme?.(th.id);
         onClose();
       },
     })),

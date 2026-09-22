@@ -5,12 +5,14 @@ import { SearchAddon } from "@xterm/addon-search";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { HostConfig } from "../types";
-import { Search, ChevronDown, ChevronUp, X, ZoomIn, ZoomOut, Terminal as TermIcon } from "lucide-react";
+import { TERMINAL_THEMES } from "../themes";
+import { Search, ChevronDown, ChevronUp, X, ZoomIn, ZoomOut, Terminal as TermIcon, Download } from "lucide-react";
 
 interface TerminalViewProps {
   sessionId: string;
   host: HostConfig;
   isActive: boolean;
+  themeId?: string;
   onFocus?: () => void;
   broadcastMode?: boolean;
   onBroadcastInput?: (data: string) => void;
@@ -20,6 +22,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   sessionId,
   host,
   isActive,
+  themeId,
   onFocus,
   broadcastMode,
   onBroadcastInput,
@@ -39,34 +42,15 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   useEffect(() => {
     if (!containerRef.current) return;
 
+    const currentTheme = TERMINAL_THEMES[themeId || "obsidian"] || TERMINAL_THEMES.obsidian;
+
     // Initialize xterm.js instance
     const term = new Terminal({
       cursorBlink: true,
       cursorStyle: "bar",
       fontSize,
       fontFamily: "'JetBrains Mono', monospace",
-      theme: {
-        background: "#080c14",
-        foreground: "#f1f5f9",
-        cursor: "#06b6d4",
-        selectionBackground: "rgba(6, 182, 212, 0.3)",
-        black: "#0b0f19",
-        red: "#f43f5e",
-        green: "#10b981",
-        yellow: "#f59e0b",
-        blue: "#3b82f6",
-        magenta: "#d946ef",
-        cyan: "#06b6d4",
-        white: "#f8fafc",
-        brightBlack: "#475569",
-        brightRed: "#fb7185",
-        brightGreen: "#34d399",
-        brightYellow: "#fbbf24",
-        brightBlue: "#60a5fa",
-        brightMagenta: "#e879f9",
-        brightCyan: "#22d3ee",
-        brightWhite: "#ffffff",
-      },
+      theme: currentTheme,
       allowTransparency: true,
       scrollback: 10000,
     });
@@ -197,6 +181,38 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     if (searchAddonRef.current && searchQuery) {
       searchAddonRef.current.findPrevious(searchQuery);
     }
+  };
+
+  // Update theme dynamically
+  useEffect(() => {
+    if (termRef.current) {
+      const selected = TERMINAL_THEMES[themeId || "obsidian"] || TERMINAL_THEMES.obsidian;
+      termRef.current.options.theme = selected;
+    }
+  }, [themeId]);
+
+  // Export scrollback buffer as .log file
+  const handleExportLog = () => {
+    if (!termRef.current) return;
+    const term = termRef.current;
+    const buffer = term.buffer.active;
+    const lines: string[] = [];
+    for (let i = 0; i < buffer.length; i++) {
+      const line = buffer.getLine(i);
+      if (line) {
+        lines.push(line.translateToString(true));
+      }
+    }
+    const logText = lines.join("\n").trimEnd();
+    const blob = new Blob([logText], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const namePart = (host.name || host.hostname).toLowerCase().replace(/[^a-z0-9]/g, "-");
+    link.href = url;
+    link.download = `terminal-${namePart}-${timestamp}.log`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   // Focus terminal when pane becomes active
@@ -352,6 +368,23 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             }}
           >
             <Search size={13} />
+          </button>
+
+          {/* Export Session Log */}
+          <button
+            onClick={handleExportLog}
+            title="Export Session Log (.log)"
+            style={{
+              background: "none",
+              border: "none",
+              color: "#64748b",
+              cursor: "pointer",
+              padding: "2px",
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
+            <Download size={13} />
           </button>
 
           {/* Zoom In/Out */}

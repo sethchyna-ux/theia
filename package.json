@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build:app": "tauri build",
+    "build:dmg": "npm run build:app && mkdir -p target/release/bundle/dmg && hdiutil create -volname 'Theia SSH' -srcfolder target/release/bundle/macos/theia.app -ov -format UDZO target/release/bundle/dmg/theia_0.1.0_aarch64.dmg"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.2.0",

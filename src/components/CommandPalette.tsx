@@ -19,6 +19,7 @@ import {
   Type,
   Eye,
   X,
+  Sparkles,
 } from "lucide-react";
 import { HostConfig, SplitLayout, ActiveView } from "../types";
 import { TERMINAL_THEMES } from "../themes";
@@ -51,6 +52,7 @@ interface CommandPaletteProps {
   onOpenSettings?: () => void;
   onChangeFont?: (fontId: string) => void;
   onToggleVibrancy?: () => void;
+  onOpenAbout?: () => void;
 }
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
@@ -69,6 +71,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onOpenSettings,
   onChangeFont,
   onToggleVibrancy,
+  onOpenAbout,
 }) => {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -240,6 +243,21 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             action: () => {
               onToggleVibrancy();
               onClose();
+            },
+          },
+        ]
+      : []),
+    ...(onOpenAbout
+      ? [
+          {
+            id: "about_theia",
+            title: "About Theia: The Anti-Freemium Manifesto",
+            subtitle: "Why Theia was created, zero tracking, 100% open-source philosophy",
+            category: "Actions" as const,
+            icon: <Sparkles size={16} color="#22d3ee" />,
+            action: () => {
+              onClose();
+              onOpenAbout();
             },
           },
         ]

@@ -16,6 +16,7 @@ import {
   HelpCircle,
   Video,
   Circle,
+  Sparkles,
 } from "lucide-react";
 import { SessionTab, SplitLayout } from "../types";
 import { TERMINAL_THEMES } from "../themes";
@@ -42,6 +43,7 @@ interface TitleBarProps {
   onToggleRecording?: () => void;
   onOpenCheatSheet?: () => void;
   onOpenThemeEditor?: () => void;
+  onOpenAbout?: () => void;
 }
 
 export const TitleBar: React.FC<TitleBarProps> = ({
@@ -66,6 +68,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   onToggleRecording,
   onOpenCheatSheet,
   onOpenThemeEditor,
+  onOpenAbout,
 }) => {
   const [showThemeMenu, setShowThemeMenu] = React.useState(false);
   return (
@@ -84,7 +87,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
         zIndex: 50,
       }}
     >
-      {/* Session Tabs Section */}
+      {/* Session Tabs Section & Brand Badge */}
       <div
         style={{
           display: "flex",
@@ -95,6 +98,42 @@ export const TitleBar: React.FC<TitleBarProps> = ({
           height: "100%",
         }}
       >
+        {/* Brand Badge */}
+        {onOpenAbout && (
+          <div
+            onClick={onOpenAbout}
+            title="About Theia: The Anti-Freemium Manifesto"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "4px 8px",
+              borderRadius: "6px",
+              cursor: "pointer",
+              background: "rgba(6, 182, 212, 0.08)",
+              border: "1px solid rgba(6, 182, 212, 0.2)",
+              marginRight: "4px",
+              flexShrink: 0,
+              transition: "all 0.15s ease",
+            }}
+          >
+            <img
+              src="/theia-icon.png"
+              alt="Theia"
+              style={{ width: "16px", height: "16px", borderRadius: "3px" }}
+            />
+            <span
+              style={{
+                fontSize: "11px",
+                fontWeight: 700,
+                color: "#22d3ee",
+                letterSpacing: "0.5px",
+              }}
+            >
+              THEIA
+            </span>
+          </div>
+        )}
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
           return (
@@ -542,6 +581,37 @@ export const TitleBar: React.FC<TitleBarProps> = ({
             }}
           >
             <Sliders size={13} />
+          </button>
+        )}
+
+        {/* About Theia Manifesto */}
+        {onOpenAbout && (
+          <button
+            onClick={onOpenAbout}
+            title="About Theia: The Anti-Freemium Manifesto"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+              padding: "5px 9px",
+              borderRadius: "6px",
+              fontSize: "11px",
+              fontWeight: 600,
+              cursor: "pointer",
+              border: "1px solid rgba(6, 182, 212, 0.25)",
+              background: "rgba(6, 182, 212, 0.08)",
+              color: "#22d3ee",
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(6, 182, 212, 0.18)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(6, 182, 212, 0.08)";
+            }}
+          >
+            <Sparkles size={12} />
+            <span>About</span>
           </button>
         )}
       </div>

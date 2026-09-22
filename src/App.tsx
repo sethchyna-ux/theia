@@ -15,6 +15,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { SshServerAgentView } from "./components/SshServerAgentView";
 import { ThemeEditorModal } from "./components/ThemeEditorModal";
 import { CheatSheetModal } from "./components/CheatSheetModal";
+import { AboutModal } from "./components/AboutModal";
 import { SessionReplayModal } from "./components/SessionReplayModal";
 import { SessionRecorder, RecordedSession } from "./utils/SessionRecorder";
 import { ActiveView, HostConfig, SessionTab, SplitLayout } from "./types";
@@ -52,6 +53,9 @@ export const App: React.FC = () => {
 
   // Cheat sheet modal
   const [isCheatSheetOpen, setIsCheatSheetOpen] = useState(false);
+
+  // About & Manifesto modal
+  const [isAboutOpen, setIsAboutOpen] = useState(false);
 
   // Session recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -364,6 +368,7 @@ export const App: React.FC = () => {
         onToggleRecording={handleToggleRecording}
         onOpenCheatSheet={() => setIsCheatSheetOpen(true)}
         onOpenThemeEditor={() => setIsThemeEditorOpen(true)}
+        onOpenAbout={() => setIsAboutOpen(true)}
       />
 
       <div style={{ display: "flex", flex: 1, height: "calc(100vh - 44px)", overflow: "hidden" }}>
@@ -379,6 +384,7 @@ export const App: React.FC = () => {
           }}
           onEditHost={handleEditHost}
           onDeleteHost={handleDeleteHost}
+          onOpenAbout={() => setIsAboutOpen(true)}
         />
 
         {/* Center Canvas */}
@@ -476,6 +482,7 @@ export const App: React.FC = () => {
           setVibrancyEnabled(next);
           invoke("set_window_vibrancy", { enabled: next }).catch(() => {});
         }}
+        onOpenAbout={() => setIsAboutOpen(true)}
       />
 
       {/* Settings Modal */}
@@ -505,6 +512,13 @@ export const App: React.FC = () => {
       <CheatSheetModal
         isOpen={isCheatSheetOpen}
         onClose={() => setIsCheatSheetOpen(false)}
+      />
+
+      {/* About & Theia Anti-Freemium Manifesto Modal */}
+      <AboutModal
+        isOpen={isAboutOpen}
+        onClose={() => setIsAboutOpen(false)}
+        onOpenCheatSheet={() => setIsCheatSheetOpen(true)}
       />
 
       {/* Session Replay Modal */}

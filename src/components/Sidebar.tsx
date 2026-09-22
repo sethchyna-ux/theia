@@ -28,6 +28,7 @@ interface SidebarProps {
   onOpenNewHostModal: () => void;
   onEditHost?: (host: HostConfig) => void;
   onDeleteHost?: (hostId: string) => void;
+  onOpenAbout?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -38,6 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenNewHostModal,
   onEditHost,
   onDeleteHost,
+  onOpenAbout,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -242,6 +244,42 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <Server size={18} />
           </button>
+
+          {/* Bottom About & Manifesto Button */}
+          {onOpenAbout && (
+            <div style={{ marginTop: "auto", paddingBottom: "14px" }}>
+              <button
+                onClick={onOpenAbout}
+                title="Theia Anti-Freemium Manifesto (About)"
+                style={{
+                  width: "38px",
+                  height: "38px",
+                  borderRadius: "8px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: "1px solid rgba(6, 182, 212, 0.25)",
+                  cursor: "pointer",
+                  background: "rgba(6, 182, 212, 0.08)",
+                  transition: "all 0.15s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "rgba(6, 182, 212, 0.2)";
+                  e.currentTarget.style.borderColor = "rgba(6, 182, 212, 0.4)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "rgba(6, 182, 212, 0.08)";
+                  e.currentTarget.style.borderColor = "rgba(6, 182, 212, 0.25)";
+                }}
+              >
+                <img
+                  src="/theia-icon.png"
+                  alt="About Theia"
+                  style={{ width: "20px", height: "20px", borderRadius: "4px" }}
+                />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* 2. Host Explorer Drawer */}

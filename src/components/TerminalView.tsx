@@ -13,6 +13,8 @@ interface TerminalViewProps {
   host: HostConfig;
   isActive: boolean;
   themeId?: string;
+  fontFamily?: string;
+  customFontSize?: number;
   onFocus?: () => void;
   broadcastMode?: boolean;
   onBroadcastInput?: (data: string) => void;
@@ -23,6 +25,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   host,
   isActive,
   themeId,
+  fontFamily,
+  customFontSize,
   onFocus,
   broadcastMode,
   onBroadcastInput,
@@ -48,8 +52,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     const term = new Terminal({
       cursorBlink: true,
       cursorStyle: "bar",
-      fontSize,
-      fontFamily: "'JetBrains Mono', monospace",
+      fontSize: customFontSize || fontSize,
+      fontFamily: fontFamily || '"SF Mono", Menlo, monospace',
       theme: currentTheme,
       allowTransparency: true,
       scrollback: 10000,
@@ -152,6 +156,22 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       invoke("ssh_disconnect", { sessionId }).catch(() => {});
     };
   }, [sessionId]);
+
+  useEffect(() => {
+    if (termRef.current) {
+      if (themeId && TERMINAL_THEMES[themeId]) {
+        termRef.current.options.theme = TERMINAL_THEMES[themeId];
+      }
+      if (fontFamily) {
+        termRef.current.options.fontFamily = fontFamily;
+      }
+      if (customFontSize) {
+        termRef.current.options.fontSize = customFontSize;
+        setFontSize(customFontSize);
+      }
+      fitAddonRef.current?.fit();
+    }
+  }, [themeId, fontFamily, customFontSize]);
 
   // Update font size
   const handleZoom = (delta: number) => {

@@ -12,6 +12,8 @@ interface SplitPaneManagerProps {
   broadcastMode: boolean;
   onBroadcastInput: (data: string) => void;
   themeId?: string;
+  fontFamily?: string;
+  fontSize?: number;
 }
 
 export const SplitPaneManager: React.FC<SplitPaneManagerProps> = ({
@@ -23,6 +25,8 @@ export const SplitPaneManager: React.FC<SplitPaneManagerProps> = ({
   broadcastMode,
   onBroadcastInput,
   themeId,
+  fontFamily,
+  fontSize,
 }) => {
   if (tabs.length === 0) {
     return (
@@ -217,6 +221,8 @@ export const SplitPaneManager: React.FC<SplitPaneManagerProps> = ({
                   host={tab.host}
                   isActive={isActive}
                   themeId={themeId}
+                  fontFamily={fontFamily}
+                  customFontSize={fontSize}
                   onFocus={() => onSelectTab(tab.id)}
                   broadcastMode={broadcastMode}
                   onBroadcastInput={onBroadcastInput}

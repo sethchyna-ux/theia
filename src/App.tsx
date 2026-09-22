@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { TitleBar } from "./components/TitleBar";
 import { Sidebar } from "./components/Sidebar";
 import { SplitPaneManager } from "./components/SplitPaneManager";
@@ -10,7 +11,14 @@ import { KeyVault } from "./components/KeyVault";
 import { ResourceMonitor } from "./components/ResourceMonitor";
 import { HostModal } from "./components/HostModal";
 import { CommandPalette } from "./components/CommandPalette";
+import { SettingsModal } from "./components/SettingsModal";
 import { ActiveView, HostConfig, SessionTab, SplitLayout } from "./types";
+import {
+  MONOSPACE_FONTS,
+  getStoredFontId,
+  getStoredFontSize,
+  getStoredVibrancy,
+} from "./fonts";
 
 export const App: React.FC = () => {
   // Navigation & View State
@@ -33,6 +41,12 @@ export const App: React.FC = () => {
 
   // Terminal Theme state (Obsidian, Catppuccin, Tokyo Night, Dracula, Nord, Matrix)
   const [terminalTheme, setTerminalTheme] = useState<string>("obsidian");
+
+  // Font & Preferences state
+  const [fontId, setFontId] = useState<string>(getStoredFontId());
+  const [fontSize, setFontSize] = useState<number>(getStoredFontSize());
+  const [vibrancyEnabled, setVibrancyEnabled] = useState<boolean>(getStoredVibrancy());
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Load all hosts on startup
   const refreshHosts = async () => {
@@ -111,7 +125,27 @@ export const App: React.FC = () => {
     handleNewLocalTab();
   }, []);
 
-  // Native macOS keyboard shortcuts: ⌘T, ⌘W, ⌘K, ⌘B, ⌘H, ⌘1-9
+  // Listen for macOS System Tray Quick-Connect and new terminal events
+  useEffect(() => {
+    const unlistenTrayHostPromise = listen<string>("tray-connect-host", (event) => {
+      const hostId = event.payload;
+      const target = hosts.find((h) => h.id === hostId);
+      if (target) {
+        handleConnectHost(target);
+      }
+    });
+
+    const unlistenTrayTermPromise = listen("tray-new-terminal", () => {
+      handleNewLocalTab();
+    });
+
+    return () => {
+      unlistenTrayHostPromise.then((unlisten) => unlisten());
+      unlistenTrayTermPromise.then((unlisten) => unlisten());
+    };
+  }, [hosts]);
+
+  // Native macOS keyboard shortcuts: ⌘T, ⌘W, ⌘K, ⌘B, ⌘H, ⌘,, ⌘1-9
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isCmd = e.metaKey || e.ctrlKey;
@@ -132,6 +166,9 @@ export const App: React.FC = () => {
       } else if (e.key.toLowerCase() === "k" || e.key.toLowerCase() === "p") {
         e.preventDefault();
         setIsCommandPaletteOpen((prev) => !prev);
+      } else if (e.key === "," && !e.shiftKey) {
+        e.preventDefault();
+        setIsSettingsOpen((prev) => !prev);
       } else if (e.key.toLowerCase() === "b" && !e.shiftKey) {
         e.preventDefault();
         setBroadcastMode((prev) => !prev);
@@ -236,6 +273,8 @@ export const App: React.FC = () => {
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || null;
 
+  const currentFont = MONOSPACE_FONTS.find((f) => f.id === fontId) || MONOSPACE_FONTS[0];
+
   return (
     <div
       style={{
@@ -243,7 +282,8 @@ export const App: React.FC = () => {
         flexDirection: "column",
         height: "100vh",
         width: "100vw",
-        backgroundColor: "#080c14",
+        backgroundColor: vibrancyEnabled ? "rgba(8, 12, 20, 0.78)" : "#080c14",
+        backdropFilter: vibrancyEnabled ? "blur(20px)" : "none",
         overflow: "hidden",
       }}
     >
@@ -264,6 +304,7 @@ export const App: React.FC = () => {
         onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         themeId={terminalTheme}
         onChangeTheme={setTerminalTheme}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         broadcastMode={broadcastMode}
         onToggleBroadcast={() => setBroadcastMode(!broadcastMode)}
         hudVisible={hudVisible}
@@ -292,7 +333,7 @@ export const App: React.FC = () => {
             display: "flex",
             flexDirection: "column",
             height: "100%",
-            backgroundColor: "#080c14",
+            backgroundColor: vibrancyEnabled ? "rgba(8, 12, 20, 0.65)" : "#080c14",
             position: "relative",
             overflow: "hidden",
           }}
@@ -316,6 +357,8 @@ export const App: React.FC = () => {
                   broadcastMode={broadcastMode}
                   onBroadcastInput={handleBroadcastInput}
                   themeId={terminalTheme}
+                  fontFamily={currentFont.fontFamily}
+                  fontSize={fontSize}
                 />
               </div>
             </>
@@ -364,6 +407,27 @@ export const App: React.FC = () => {
         onChangeSplitLayout={setSplitLayout}
         onExecuteSnippet={handleExecuteSnippet}
         onChangeTheme={setTerminalTheme}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onChangeFont={setFontId}
+        onToggleVibrancy={() => {
+          const next = !vibrancyEnabled;
+          setVibrancyEnabled(next);
+          invoke("set_window_vibrancy", { enabled: next }).catch(() => {});
+        }}
+      />
+
+      {/* macOS Preferences / Settings Modal (⌘,) */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        currentFontId={fontId}
+        onFontChange={setFontId}
+        currentFontSize={fontSize}
+        onFontSizeChange={setFontSize}
+        vibrancyEnabled={vibrancyEnabled}
+        onVibrancyChange={(enabled) => {
+          setVibrancyEnabled(enabled);
+        }}
       />
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import {
   Server,
   X,
@@ -6,6 +7,7 @@ import {
   Lock,
   ArrowRight,
   Route,
+  ShieldCheck,
 } from "lucide-react";
 import { HostConfig } from "../types";
 
@@ -34,6 +36,7 @@ export const HostModal: React.FC<HostModalProps> = ({
   const [group, setGroup] = useState("Production");
   const [tags, setTags] = useState("");
   const [bastionId, setBastionId] = useState<string>("");
+  const [saveToKeychain, setSaveToKeychain] = useState(true);
 
   useEffect(() => {
     if (existingHost) {
@@ -47,6 +50,18 @@ export const HostModal: React.FC<HostModalProps> = ({
       setGroup(existingHost.group || "Production");
       setTags(existingHost.tags.join(", "));
       setBastionId(existingHost.bastion_id || "");
+
+      // Check if password exists in macOS Keychain
+      if (!existingHost.password) {
+        invoke<string | null>("keychain_get_secret", { account: existingHost.id })
+          .then((secret) => {
+            if (secret) {
+              setPassword(secret);
+              setAuthType("password");
+            }
+          })
+          .catch(() => {});
+      }
     } else {
       setName("");
       setHostname("");
@@ -58,16 +73,27 @@ export const HostModal: React.FC<HostModalProps> = ({
       setGroup("Production");
       setTags("");
       setBastionId("");
+      setSaveToKeychain(true);
     }
   }, [existingHost, isOpen]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (connectImmediately: boolean) => {
+  const handleSubmit = async (connectImmediately: boolean) => {
     if (!name.trim() || !hostname.trim()) return;
 
+    const hostId = existingHost ? existingHost.id : `host_${Date.now()}`;
+
+    if (authType === "password" && password.trim() && saveToKeychain) {
+      try {
+        await invoke("keychain_save_secret", { account: hostId, secret: password });
+      } catch (err) {
+        console.warn("Could not save password to keychain:", err);
+      }
+    }
+
     const host: HostConfig = {
-      id: existingHost ? existingHost.id : `host_${Date.now()}`,
+      id: hostId,
       name: name.trim(),
       hostname: hostname.trim(),
       port: Number(port) || 22,
@@ -349,8 +375,28 @@ export const HostModal: React.FC<HostModalProps> = ({
                     fontSize: "13px",
                     outline: "none",
                     boxSizing: "border-box",
+                    marginBottom: "8px",
                   }}
                 />
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    fontSize: "12px",
+                    color: "#38bdf8",
+                    cursor: "pointer",
+                    userSelect: "none",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={saveToKeychain}
+                    onChange={(e) => setSaveToKeychain(e.target.checked)}
+                    style={{ accentColor: "#06b6d4", cursor: "pointer" }}
+                  />
+                  <ShieldCheck size={14} /> Store securely in macOS Keychain (Keychain Services)
+                </label>
               </div>
             )}
           </div>

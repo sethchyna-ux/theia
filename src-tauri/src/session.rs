@@ -281,8 +281,15 @@ async fn authenticate_session<H: Handler + Send + 'static>(
         }
     }
 
-    // 3. Try password if provided
-    if let Some(ref pwd) = host.password {
+    // 3. Try password from host config or Apple Keychain
+    let maybe_pwd = if let Some(ref pwd) = host.password {
+        Some(pwd.clone())
+    } else {
+        crate::keychain::get_secret(&host.id).ok().flatten()
+            .or_else(|| crate::keychain::get_secret(&host.hostname).ok().flatten())
+    };
+
+    if let Some(ref pwd) = maybe_pwd {
         if let Ok(AuthResult::Success) = session.authenticate_password(user, pwd).await {
             return Ok(());
         }

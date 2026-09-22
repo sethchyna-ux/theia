@@ -15,9 +15,13 @@ import {
   Square,
   ArrowRight,
   Palette,
+  Sliders,
+  Type,
+  Eye,
 } from "lucide-react";
 import { HostConfig, SplitLayout, ActiveView } from "../types";
 import { TERMINAL_THEMES } from "../themes";
+import { MONOSPACE_FONTS } from "../fonts";
 
 interface CommandItem {
   id: string;
@@ -42,6 +46,9 @@ interface CommandPaletteProps {
   onChangeSplitLayout: (layout: SplitLayout) => void;
   onExecuteSnippet: (command: string, broadcast: boolean) => void;
   onChangeTheme?: (themeId: string) => void;
+  onOpenSettings?: () => void;
+  onChangeFont?: (fontId: string) => void;
+  onToggleVibrancy?: () => void;
 }
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
@@ -57,6 +64,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   hudVisible,
   onChangeSplitLayout,
   onChangeTheme,
+  onOpenSettings,
+  onChangeFont,
+  onToggleVibrancy,
 }) => {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -197,6 +207,49 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         onClose();
       },
     },
+    ...(onOpenSettings
+      ? [
+          {
+            id: "open_settings",
+            title: "Open Preferences / Settings",
+            subtitle: "Configure monospace fonts, font sizes, vibrancy, and keychain — ⌘,",
+            category: "Actions" as const,
+            icon: <Sliders size={16} color="#06b6d4" />,
+            action: () => {
+              onOpenSettings();
+              onClose();
+            },
+          },
+        ]
+      : []),
+    ...(onToggleVibrancy
+      ? [
+          {
+            id: "toggle_vibrancy",
+            title: "Toggle Window Vibrancy",
+            subtitle: "Switch between translucent frosted glass and opaque background",
+            category: "Actions" as const,
+            icon: <Eye size={16} color="#22d3ee" />,
+            action: () => {
+              onToggleVibrancy();
+              onClose();
+            },
+          },
+        ]
+      : []),
+    ...(onChangeFont
+      ? MONOSPACE_FONTS.map((font) => ({
+          id: `font_${font.id}`,
+          title: `Font: ${font.name}`,
+          subtitle: font.description,
+          category: "Actions" as const,
+          icon: <Type size={16} color="#38bdf8" />,
+          action: () => {
+            onChangeFont(font.id);
+            onClose();
+          },
+        }))
+      : []),
     // Map existing hosts
     ...hosts.map((h) => ({
       id: `host_${h.id}`,

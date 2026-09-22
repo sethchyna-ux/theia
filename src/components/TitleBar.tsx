@@ -12,6 +12,7 @@ import {
   Server,
   Command,
   Palette,
+  Sliders,
 } from "lucide-react";
 import { SessionTab, SplitLayout } from "../types";
 import { TERMINAL_THEMES } from "../themes";
@@ -32,6 +33,7 @@ interface TitleBarProps {
   onOpenCommandPalette?: () => void;
   themeId?: string;
   onChangeTheme?: (themeId: string) => void;
+  onOpenSettings?: () => void;
 }
 
 export const TitleBar: React.FC<TitleBarProps> = ({
@@ -50,6 +52,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   onOpenCommandPalette,
   themeId = "obsidian",
   onChangeTheme,
+  onOpenSettings,
 }) => {
   const [showThemeMenu, setShowThemeMenu] = React.useState(false);
   return (
@@ -422,6 +425,28 @@ export const TitleBar: React.FC<TitleBarProps> = ({
           <Activity size={13} />
           <span>HUD</span>
         </button>
+
+        {/* Preferences / Settings */}
+        {onOpenSettings && (
+          <button
+            onClick={onOpenSettings}
+            title="macOS Preferences (Fonts, Vibrancy, Keychain)"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+              padding: "5px 8px",
+              borderRadius: "6px",
+              fontSize: "11px",
+              cursor: "pointer",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+              background: "rgba(255, 255, 255, 0.04)",
+              color: "#94a3b8",
+            }}
+          >
+            <Sliders size={13} />
+          </button>
+        )}
       </div>
     </header>
   );

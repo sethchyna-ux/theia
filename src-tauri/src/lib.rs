@@ -1,9 +1,11 @@
 mod hosts;
+mod keychain;
 mod local_pty;
 mod models;
 mod session;
 mod sftp;
 mod snippets;
+mod tray;
 mod tunnel;
 mod vault;
 
@@ -306,10 +308,52 @@ fn get_server_telemetry() -> ServerTelemetry {
     }
 }
 
+// ---------------------- Keychain & Vibrancy Commands ----------------------
+#[tauri::command]
+fn keychain_save_secret(account: String, secret: String) -> Result<(), String> {
+    keychain::store_secret(&account, &secret)
+}
+
+#[tauri::command]
+fn keychain_get_secret(account: String) -> Result<Option<String>, String> {
+    keychain::get_secret(&account)
+}
+
+#[tauri::command]
+fn keychain_delete_secret(account: String) -> Result<(), String> {
+    keychain::delete_secret(&account)
+}
+
+#[tauri::command]
+fn set_window_vibrancy(window: tauri::WebviewWindow, enabled: bool) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        if enabled {
+            let _ = window_vibrancy::apply_vibrancy(&window, window_vibrancy::NSVisualEffectMaterial::HudWindow, None, None);
+        } else {
+            let _ = window_vibrancy::clear_vibrancy(&window);
+        }
+    }
+    Ok(())
+}
+
 // ---------------------- App Entrypoint ----------------------
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::Manager;
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window_vibrancy::apply_vibrancy(&window, window_vibrancy::NSVisualEffectMaterial::HudWindow, None, None);
+                }
+            }
+            if let Err(e) = tray::setup_tray(app.handle()) {
+                log::error!("Failed to setup tray: {e}");
+            }
+            Ok(())
+        })
         .manage(AppState {
             session_mgr: SessionManager::new(),
             tunnel_mgr: TunnelManager::new(),
@@ -341,6 +385,10 @@ pub fn run() {
             save_snippet,
             delete_snippet,
             get_server_telemetry,
+            keychain_save_secret,
+            keychain_get_secret,
+            keychain_delete_secret,
+            set_window_vibrancy,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

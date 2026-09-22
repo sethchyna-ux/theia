@@ -125,3 +125,23 @@ export interface SshServerConfig {
   allow_pubkey: boolean;
 }
 
+export interface PasskeyDeviceInfo {
+  id: string;
+  name: string;
+  device_type: "yubikey" | "touch_id" | "fido2_generic";
+  description: string;
+  algorithms_supported: string[];
+  supports_resident: boolean;
+  supports_pin_touch: boolean;
+  is_connected: boolean;
+}
+
+export interface GeneratePasskeyOptions {
+  name: string;
+  key_type: string;
+  resident: boolean;
+  verify_required: boolean;
+  application?: string;
+  device_target: string;
+}
+

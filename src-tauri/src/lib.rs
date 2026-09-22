@@ -4,6 +4,7 @@ mod known_hosts;
 mod local_pty;
 mod models;
 mod network;
+mod passkey;
 mod session;
 mod sftp;
 mod snippets;
@@ -537,8 +538,24 @@ fn clear_all_agent_keys() -> Result<String, String> {
 }
 
 #[tauri::command]
-fn auto_configure_ssh_agent() -> Result<ssh_agent::SshAgentStatus, String> {
+fn auto_configure_ssh_agent() -> Result<String, String> {
     ssh_agent::auto_configure_agent()
+}
+
+// ---------------------- Passkey & Hardware Security Key Commands ----------------------
+#[tauri::command]
+fn get_passkey_capabilities() -> Vec<passkey::PasskeyDeviceInfo> {
+    passkey::get_passkey_capabilities()
+}
+
+#[tauri::command]
+fn generate_passkey(opts: passkey::GeneratePasskeyOptions) -> Result<KeyPairInfo, String> {
+    passkey::generate_passkey(opts)
+}
+
+#[tauri::command]
+fn download_resident_keys() -> Result<Vec<KeyPairInfo>, String> {
+    passkey::download_resident_keys()
 }
 
 // ---------------------- SSH Server Hosting Commands ----------------------
@@ -660,6 +677,9 @@ pub fn run() {
             get_server_authorized_keys,
             add_server_authorized_key,
             remove_server_authorized_key,
+            get_passkey_capabilities,
+            generate_passkey,
+            download_resident_keys,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -187,6 +187,9 @@ pub fn add_key_to_agent(
     };
 
     cmd.arg(&expanded_path);
+    cmd.stdin(std::process::Stdio::null());
+    cmd.env("SSH_ASKPASS_REQUIRE", "force");
+    cmd.env("SSH_ASKPASS", "/usr/bin/false");
 
     let output = cmd
         .output()
@@ -197,8 +200,23 @@ pub fn add_key_to_agent(
         let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
         Ok(if !out.is_empty() { out } else if !err.is_empty() { err } else { format!("Identity added: {}", key_path) })
     } else {
+        // Try with macOS Keychain flag
+        let kc_output = Command::new("ssh-add")
+            .arg("--apple-use-keychain")
+            .arg(&expanded_path)
+            .stdin(std::process::Stdio::null())
+            .env("SSH_ASKPASS_REQUIRE", "force")
+            .env("SSH_ASKPASS", "/usr/bin/false")
+            .output();
+
+        if let Ok(kc_out) = kc_output {
+            if kc_out.status.success() {
+                return Ok(format!("Identity added via macOS Keychain: {}", key_path));
+            }
+        }
+
         let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        Err(if !err.is_empty() { err } else { "Failed to add key to ssh-agent".to_string() })
+        Err(if !err.is_empty() { err } else { "Failed to add key to ssh-agent (key may be protected by a passphrase)".to_string() })
     }
 }
 
@@ -241,11 +259,15 @@ pub fn clear_all_agent_keys() -> Result<String, String> {
     }
 }
 
-pub fn auto_configure_agent() -> Result<SshAgentStatus, String> {
+pub fn auto_configure_agent() -> Result<String, String> {
     // 1. Verify if SSH_AUTH_SOCK is active; if not, spawn ssh-agent
     let current_status = get_agent_status();
     if !current_status.active || current_status.socket_path.is_none() {
-        if let Ok(out) = Command::new("ssh-agent").arg("-s").output() {
+        if let Ok(out) = Command::new("ssh-agent")
+            .arg("-s")
+            .stdin(std::process::Stdio::null())
+            .output()
+        {
             let stdout = String::from_utf8_lossy(&out.stdout);
             for line in stdout.lines() {
                 if line.starts_with("SSH_AUTH_SOCK=") {
@@ -258,14 +280,68 @@ pub fn auto_configure_agent() -> Result<SshAgentStatus, String> {
         }
     }
 
+    let socket_path = env::var("SSH_AUTH_SOCK").unwrap_or_else(|_| "active agent".to_string());
+    let mut added_keys = Vec::new();
+    let mut skipped_keys = Vec::new();
+
     // 2. Discover private keys in ~/.ssh/ and ~/.theia/vault/
     if let Some(home) = dirs::home_dir() {
         let ssh_dir = home.join(".ssh");
-        let candidate_names = ["id_ed25519", "id_rsa", "id_ecdsa", "id_dsa"];
-        for name in &candidate_names {
-            let key_path = ssh_dir.join(name);
-            if key_path.exists() {
-                let _ = Command::new("ssh-add").arg(&key_path).output();
+        if ssh_dir.is_dir() {
+            if let Ok(entries) = std::fs::read_dir(&ssh_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_file() {
+                        let file_name = path.file_name().unwrap_or_default().to_string_lossy();
+                        if file_name.ends_with(".pub")
+                            || file_name == "known_hosts"
+                            || file_name == "known_hosts.old"
+                            || file_name == "authorized_keys"
+                            || file_name == "config"
+                            || file_name.starts_with('.')
+                        {
+                            continue;
+                        }
+
+                        // Check if key is unencrypted or in keychain
+                        let is_unencrypted = Command::new("ssh-keygen")
+                            .arg("-y")
+                            .arg("-P")
+                            .arg("")
+                            .arg("-f")
+                            .arg(&path)
+                            .stdin(std::process::Stdio::null())
+                            .output()
+                            .map(|o| o.status.success())
+                            .unwrap_or(false);
+
+                        if is_unencrypted {
+                            let out = Command::new("ssh-add")
+                                .arg(&path)
+                                .stdin(std::process::Stdio::null())
+                                .env("SSH_ASKPASS_REQUIRE", "force")
+                                .env("SSH_ASKPASS", "/usr/bin/false")
+                                .output();
+                            if out.map(|o| o.status.success()).unwrap_or(false) {
+                                added_keys.push(file_name.to_string());
+                            }
+                        } else {
+                            // Try Apple Keychain without blocking
+                            let out = Command::new("ssh-add")
+                                .arg("--apple-use-keychain")
+                                .arg(&path)
+                                .stdin(std::process::Stdio::null())
+                                .env("SSH_ASKPASS_REQUIRE", "force")
+                                .env("SSH_ASKPASS", "/usr/bin/false")
+                                .output();
+                            if out.map(|o| o.status.success()).unwrap_or(false) {
+                                added_keys.push(format!("{} (keychain)", file_name));
+                            } else {
+                                skipped_keys.push(format!("{} (passphrase protected)", file_name));
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -275,12 +351,59 @@ pub fn auto_configure_agent() -> Result<SshAgentStatus, String> {
                 for entry in entries.flatten() {
                     let path = entry.path();
                     if path.is_file() && !path.extension().map_or(false, |ext| ext == "pub") {
-                        let _ = Command::new("ssh-add").arg(&path).output();
+                        let file_name = path.file_name().unwrap_or_default().to_string_lossy();
+                        let is_unencrypted = Command::new("ssh-keygen")
+                            .arg("-y")
+                            .arg("-P")
+                            .arg("")
+                            .arg("-f")
+                            .arg(&path)
+                            .stdin(std::process::Stdio::null())
+                            .output()
+                            .map(|o| o.status.success())
+                            .unwrap_or(false);
+
+                        if is_unencrypted {
+                            let _ = Command::new("ssh-add")
+                                .arg(&path)
+                                .stdin(std::process::Stdio::null())
+                                .env("SSH_ASKPASS_REQUIRE", "force")
+                                .env("SSH_ASKPASS", "/usr/bin/false")
+                                .output();
+                            added_keys.push(format!("vault/{}", file_name));
+                        }
                     }
                 }
             }
         }
     }
 
-    Ok(get_agent_status())
+    let summary = if !added_keys.is_empty() {
+        if !skipped_keys.is_empty() {
+            format!(
+                "Configured agent ({}). Loaded {} keys: {}. Note: {} skipped (requires passphrase).",
+                socket_path,
+                added_keys.len(),
+                added_keys.join(", "),
+                skipped_keys.join(", ")
+            )
+        } else {
+            format!(
+                "Configured agent ({}). Loaded {} keys: {}.",
+                socket_path,
+                added_keys.len(),
+                added_keys.join(", ")
+            )
+        }
+    } else if !skipped_keys.is_empty() {
+        format!(
+            "Configured agent ({}). Found keys but they require a passphrase: {}.",
+            socket_path,
+            skipped_keys.join(", ")
+        )
+    } else {
+        format!("Configured agent ({}). No local SSH keys found to load.", socket_path)
+    };
+
+    Ok(summary)
 }

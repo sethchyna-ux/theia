@@ -47,11 +47,16 @@ fn scan_dir_for_keys(dir: &Path, keys: &mut Vec<KeyPairInfo>) {
                         let trimmed = content.trim();
                         let parts: Vec<&str> = trimmed.split_whitespace().collect();
                         let key_type = if !parts.is_empty() {
-                            if parts[0].contains("ed25519") {
+                            let prefix = parts[0];
+                            if prefix.contains("sk-ssh-ed25519") || prefix.contains("ed25519-sk") {
+                                "FIDO2 (Ed25519-SK)".to_string()
+                            } else if prefix.contains("sk-ecdsa") || prefix.contains("ecdsa-sk") {
+                                "FIDO2 (ECDSA-SK)".to_string()
+                            } else if prefix.contains("ed25519") {
                                 "Ed25519".to_string()
-                            } else if parts[0].contains("rsa") {
+                            } else if prefix.contains("rsa") {
                                 "RSA".to_string()
-                            } else if parts[0].contains("ecdsa") {
+                            } else if prefix.contains("ecdsa") {
                                 "ECDSA".to_string()
                             } else {
                                 parts[0].to_string()

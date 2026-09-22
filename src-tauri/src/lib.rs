@@ -49,9 +49,7 @@ fn save_host(host: HostConfig) -> Result<(), String> {
 
 #[tauri::command]
 fn delete_host(id: String) -> Result<(), String> {
-    let mut bookmarks = load_bookmarks();
-    bookmarks.retain(|h| h.id != id);
-    save_bookmarks(&bookmarks)
+    hosts::remove_or_hide_host(&id)
 }
 
 // ---------------------- SSH Terminal Commands ----------------------
@@ -127,7 +125,109 @@ async fn ssh_disconnect(state: State<'_, AppState>, session_id: String) -> Resul
     Ok(())
 }
 
-// ---------------------- SFTP Commands ----------------------
+// ---------------------- Local Filesystem Fallbacks & SFTP Commands ----------------------
+fn resolve_fs_path(path: &str) -> std::path::PathBuf {
+    let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/"));
+    if path.is_empty() || path == "." || path == "~" {
+        home
+    } else if let Some(stripped) = path.strip_prefix("~/") {
+        home.join(stripped)
+    } else if let Some(stripped) = path.strip_prefix('~') {
+        home.join(stripped)
+    } else {
+        std::path::PathBuf::from(path)
+    }
+}
+
+fn local_list_dir(path: &str) -> Result<Vec<RemoteFileEntry>, String> {
+    let p = resolve_fs_path(path);
+    let read_dir = std::fs::read_dir(&p)
+        .map_err(|e| format!("Could not read local directory {}: {}", p.display(), e))?;
+    let mut entries = Vec::new();
+
+    for item in read_dir.flatten() {
+        let name = item.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') && name != ".env" && name != ".gitignore" && name != ".zshrc" {
+            continue;
+        }
+        let md = match item.metadata() {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        let is_dir = md.is_dir();
+        let size = md.len();
+        let modified = md
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let path_str = item.path().to_string_lossy().to_string();
+
+        entries.push(RemoteFileEntry {
+            name,
+            path: path_str,
+            is_dir,
+            size,
+            modified,
+            permissions: 0o755,
+        });
+    }
+
+    entries.sort_by(|a, b| {
+        if a.is_dir == b.is_dir {
+            a.name.to_lowercase().cmp(&b.name.to_lowercase())
+        } else if a.is_dir {
+            std::cmp::Ordering::Less
+        } else {
+            std::cmp::Ordering::Greater
+        }
+    });
+
+    Ok(entries)
+}
+
+fn local_read_file(path: &str) -> Result<String, String> {
+    let p = resolve_fs_path(path);
+    std::fs::read_to_string(&p).map_err(|e| format!("Failed to read {}: {}", p.display(), e))
+}
+
+fn local_write_file(path: &str, content: &str) -> Result<(), String> {
+    let p = resolve_fs_path(path);
+    if let Some(parent) = p.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::write(&p, content).map_err(|e| format!("Failed to write {}: {}", p.display(), e))
+}
+
+fn local_write_binary(path: &str, data: &[u8]) -> Result<(), String> {
+    let p = resolve_fs_path(path);
+    if let Some(parent) = p.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::write(&p, data).map_err(|e| format!("Failed to write {}: {}", p.display(), e))
+}
+
+fn local_mkdir(path: &str) -> Result<(), String> {
+    let p = resolve_fs_path(path);
+    std::fs::create_dir_all(&p).map_err(|e| format!("Failed to create directory {}: {}", p.display(), e))
+}
+
+fn local_delete(path: &str) -> Result<(), String> {
+    let p = resolve_fs_path(path);
+    if p.is_dir() {
+        std::fs::remove_dir_all(&p).map_err(|e| format!("Failed to remove directory {}: {}", p.display(), e))
+    } else {
+        std::fs::remove_file(&p).map_err(|e| format!("Failed to remove file {}: {}", p.display(), e))
+    }
+}
+
+fn local_rename(old_path: &str, new_path: &str) -> Result<(), String> {
+    let old_p = resolve_fs_path(old_path);
+    let new_p = resolve_fs_path(new_path);
+    std::fs::rename(&old_p, &new_p).map_err(|e| format!("Failed to rename {} -> {}: {}", old_p.display(), new_p.display(), e))
+}
+
 #[tauri::command]
 async fn sftp_list(
     state: State<'_, AppState>,
@@ -138,7 +238,7 @@ async fn sftp_list(
     if let Some(sftp) = map.get(&session_id) {
         sftp.list_dir(&path).await
     } else {
-        Err("SFTP session not ready or not available for this host".to_string())
+        local_list_dir(&path)
     }
 }
 
@@ -152,7 +252,7 @@ async fn sftp_read(
     if let Some(sftp) = map.get(&session_id) {
         sftp.read_file(&path).await
     } else {
-        Err("SFTP session not ready".to_string())
+        local_read_file(&path)
     }
 }
 
@@ -167,7 +267,7 @@ async fn sftp_write(
     if let Some(sftp) = map.get(&session_id) {
         sftp.write_file(&path, &content).await
     } else {
-        Err("SFTP session not ready".to_string())
+        local_write_file(&path, &content)
     }
 }
 
@@ -182,7 +282,7 @@ async fn sftp_write_binary(
     if let Some(sftp) = map.get(&session_id) {
         sftp.write_binary(&path, &data).await
     } else {
-        Err("SFTP session not ready".to_string())
+        local_write_binary(&path, &data)
     }
 }
 
@@ -196,7 +296,7 @@ async fn sftp_mkdir(
     if let Some(sftp) = map.get(&session_id) {
         sftp.create_dir(&path).await
     } else {
-        Err("SFTP session not ready".to_string())
+        local_mkdir(&path)
     }
 }
 
@@ -210,7 +310,7 @@ async fn sftp_delete(
     if let Some(sftp) = map.get(&session_id) {
         sftp.delete_file(&path).await
     } else {
-        Err("SFTP session not ready".to_string())
+        local_delete(&path)
     }
 }
 
@@ -225,7 +325,7 @@ async fn sftp_rename(
     if let Some(sftp) = map.get(&session_id) {
         sftp.rename(&old_path, &new_path).await
     } else {
-        Err("SFTP session not ready".to_string())
+        local_rename(&old_path, &new_path)
     }
 }
 

@@ -34,6 +34,50 @@ pub fn save_bookmarks(bookmarks: &[HostConfig]) -> Result<(), String> {
     Ok(())
 }
 
+pub fn get_hidden_hosts_path() -> Option<PathBuf> {
+    dirs::config_dir().map(|c| c.join("theia-ssh").join("hidden_hosts.json"))
+}
+
+pub fn load_hidden_hosts() -> Vec<String> {
+    let path = match get_hidden_hosts_path() {
+        Some(p) => p,
+        None => return Vec::new(),
+    };
+
+    if !path.is_file() {
+        return Vec::new();
+    }
+
+    let content = match fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+
+    serde_json::from_str::<Vec<String>>(&content).unwrap_or_default()
+}
+
+pub fn save_hidden_hosts(hidden: &[String]) -> Result<(), String> {
+    let path = get_hidden_hosts_path().ok_or("Could not resolve hidden config path")?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let json = serde_json::to_string_pretty(hidden).map_err(|e| e.to_string())?;
+    fs::write(path, json).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn remove_or_hide_host(id: &str) -> Result<(), String> {
+    let mut bookmarks = load_bookmarks();
+    bookmarks.retain(|h| h.id != id && h.name != id);
+    let _ = save_bookmarks(&bookmarks);
+
+    let mut hidden = load_hidden_hosts();
+    if !hidden.contains(&id.to_string()) {
+        hidden.push(id.to_string());
+    }
+    save_hidden_hosts(&hidden)
+}
+
 pub fn load_ssh_config() -> Vec<HostConfig> {
     let mut hosts = Vec::new();
     let home = match dirs::home_dir() {
@@ -133,6 +177,7 @@ fn expand_tilde(path: &str, home: &Path) -> String {
 pub fn get_all_hosts() -> Vec<HostConfig> {
     let mut all = load_bookmarks();
     let ssh_hosts = load_ssh_config();
+    let hidden = load_hidden_hosts();
 
     for sh in ssh_hosts {
         if !all.iter().any(|b| b.name == sh.name) {
@@ -140,5 +185,6 @@ pub fn get_all_hosts() -> Vec<HostConfig> {
         }
     }
 
+    all.retain(|h| !hidden.contains(&h.id) && !hidden.contains(&h.name));
     all
 }

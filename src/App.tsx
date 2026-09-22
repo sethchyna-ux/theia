@@ -275,6 +275,22 @@ export const App: React.FC = () => {
 
   const currentFont = MONOSPACE_FONTS.find((f) => f.id === fontId) || MONOSPACE_FONTS[0];
 
+  // Edit host
+  const handleEditHost = (host: HostConfig) => {
+    setEditingHost(host);
+    setIsHostModalOpen(true);
+  };
+
+  // Delete host
+  const handleDeleteHost = async (hostId: string) => {
+    try {
+      await invoke("delete_host", { id: hostId });
+      await refreshHosts();
+    } catch (err) {
+      console.error("Failed to delete host:", err);
+    }
+  };
+
   return (
     <div
       style={{
@@ -282,12 +298,12 @@ export const App: React.FC = () => {
         flexDirection: "column",
         height: "100vh",
         width: "100vw",
-        backgroundColor: vibrancyEnabled ? "rgba(8, 12, 20, 0.78)" : "#080c14",
-        backdropFilter: vibrancyEnabled ? "blur(20px)" : "none",
         overflow: "hidden",
+        backgroundColor: vibrancyEnabled ? "transparent" : "#060911",
+        color: "#f8fafc",
+        fontFamily: currentFont.fontFamily,
       }}
     >
-      {/* Top Titlebar with macOS traffic light spacing & session controls */}
       <TitleBar
         tabs={tabs}
         activeTabId={activeTabId}
@@ -313,8 +329,8 @@ export const App: React.FC = () => {
         onChangeSplitLayout={setSplitLayout}
       />
 
-      {/* Main Workspace (Sidebar + Center Content) */}
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+      <div style={{ display: "flex", flex: 1, height: "calc(100vh - 44px)", overflow: "hidden" }}>
+        {/* Left Navigation Sidebar */}
         <Sidebar
           activeView={activeView}
           onChangeView={setActiveView}
@@ -324,6 +340,8 @@ export const App: React.FC = () => {
             setEditingHost(null);
             setIsHostModalOpen(true);
           }}
+          onEditHost={handleEditHost}
+          onDeleteHost={handleDeleteHost}
         />
 
         {/* Center Canvas */}

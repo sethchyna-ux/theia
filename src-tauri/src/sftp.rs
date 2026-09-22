@@ -27,8 +27,8 @@ impl SftpManager {
         let lock = self.session.lock().await;
         let sftp = lock.as_ref().ok_or("SFTP session not active")?;
 
-        let canonical_path = if path.is_empty() || path == "." {
-            sftp.canonicalize(".").await.map_err(|e| e.to_string())?
+        let canonical_path = if path.is_empty() || path == "." || path == "~" || path == "~/" {
+            sftp.canonicalize(".").await.unwrap_or_else(|_| "/".to_string())
         } else {
             path.to_string()
         };

@@ -14,5 +14,20 @@ export default defineConfig({
     target: ["es2021", "chrome105", "safari15"],
     minify: !process.env.TAURI_DEBUG ? "esbuild" : false,
     sourcemap: !!process.env.TAURI_DEBUG,
+    chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor-react": ["react", "react-dom"],
+          "vendor-xterm": [
+            "@xterm/xterm",
+            "@xterm/addon-webgl",
+            "@xterm/addon-fit",
+            "@xterm/addon-search",
+          ],
+          "vendor-icons": ["lucide-react"],
+        },
+      },
+    },
   },
 });

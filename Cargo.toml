@@ -1,0 +1,25 @@
+[package]
+name = "theia-ssh"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+members = [
+    ".",
+    "src-tauri",
+]
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+russh = "0.63"
+ratatui = "0.30"
+crossterm = { version = "0.29", features = ["event-stream"] }
+clap = { version = "4", features = ["derive"] }
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+directories = "6"
+rpassword = "7"
+async-trait = "0.1"
+dirs = "6"
+bytes = "1"

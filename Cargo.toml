@@ -11,7 +11,7 @@ members = [
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
-russh = "0.63"
+russh = "0.64"
 ratatui = "0.30"
 crossterm = { version = "0.29", features = ["event-stream"] }
 clap = { version = "4", features = ["derive"] }
